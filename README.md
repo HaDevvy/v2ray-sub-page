@@ -254,3 +254,13 @@ pm2 save
 - Streisand iOS: https://apps.apple.com/us/app/streisand/id6450534064
 - Hiddify: https://github.com/hiddify/hiddify-app/releases
 - V2Ray Core: https://github.com/v2fly/v2ray-core/releases
+
+
+### Fix note: no dotenv dependency in Docker
+
+This project does not import `dotenv` at runtime. In Docker, variables are injected by `docker-compose.yml` through `env_file: .env`. If you run without Docker, export environment variables yourself or use Node's `--env-file` support:
+
+```bash
+node --env-file=.env server.js
+```
+
