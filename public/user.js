@@ -46,25 +46,10 @@ function detailRow(label, value) {
 function renderDetails(data) {
   const c = data.client;
   const rows = [
-    ['شناسه داخلی', c.id],
-    ['شناسه کاربر', c.email],
-    ['شناسه اشتراک', c.subIdMasked || c.subId],
-    ['UUID', c.uuidMasked || c.uuid],
-    ['رمز عبور', c.passwordMasked || c.password],
-    ['Auth', c.authMasked || c.auth],
-    ['Flow', c.flow || '-'],
-    ['Security', c.security || '-'],
-    ['محدودیت IP', c.limitIp],
     ['سقف ترافیک', c.totalGB ? formatBytes(c.totalGB) : 'نامحدود / ثبت‌نشده'],
     ['ترافیک مصرف‌شده', formatBytes(data.usedTraffic)],
     ['تاریخ انقضا', formatTime(c.expiryTime)],
     ['وضعیت سرویس', c.enable ? 'فعال' : 'غیرفعال'],
-    ['شناسه تلگرام', c.tgId || '-'],
-    ['گروه', c.group || '-'],
-    ['یادداشت', c.comment || '-'],
-    ['وضعیت ریست', c.reset],
-    ['Inboundها', (data.inboundIds || []).join(', ') || '-'],
-    ['مسیر سرویس', data.secretPath || '/'],
     ['زمان ایجاد', formatTime(c.createdAt)],
     ['آخرین بروزرسانی', formatTime(c.updatedAt)]
   ];
