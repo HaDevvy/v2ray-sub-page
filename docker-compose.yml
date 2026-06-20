@@ -3,7 +3,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      no_cache: true
     container_name: v2-sub-page
     restart: unless-stopped
     env_file:

@@ -1,150 +1,294 @@
 # V2 Sub Page
 
-A lightweight V2Ray subscription landing page with backend-only panel API calls.
+یک پروژه‌ی سبک برای ساخت صفحه‌ی subscription برای کاربرهای پنل. توکن پنل فقط در بک‌اند نگهداری می‌شود و فرانت‌اند مستقیم به API پنل درخواست نمی‌زند.
 
-## What this app does
+## امکانات
 
-- Reads the panel token only from environment variables.
-- Calls the panel API only from the backend.
-- Shows a clean user subscription page.
-- Provides a subscription endpoint for apps such as v2rayN, v2rayNG, V2Box, Streisand, and Hiddify.
-- Supports a hidden route prefix with `SECRET_PATH`.
-- Supports an optional `ACCESS_KEY`.
-- Masks sensitive client fields in the browser API response.
+- دریافت اطلاعات کاربر از endpoint پنل: `/panel/api/clients/get/{email}`
+- دریافت لینک‌های کانفیگ از endpoint پنل: `/panel/api/clients/subLinks/{subId}`
+- نمایش صفحه‌ی زیبا، سبک، RTL و responsive
+- نمایش لینک‌های کانفیگ و جزئیات کاربر
+- ساخت لینک subscription قابل import در کلاینت‌های رایج
+- خروجی Base64 برای subscription: `/sub/:email`
+- خروجی خام newline-separated: `/sub/:email?format=raw`
+- QR Code برای subscription
+- نگه‌داشتن توکن در `.env`
+- گزینه‌ی `SECRET_PATH` برای قرار دادن کل پروژه پشت مسیر مخفی
+- گزینه‌ی `ACCESS_KEY` برای محدودکردن دسترسی به لینک‌ها
+- آماده برای Docker و Docker Compose
 
-## Important security note
+## نصب معمولی
 
-The panel token is never sent to the browser.
-
-The browser can access only this app's backend routes, for example:
-
-```text
-/SECRET_PATH/api/user/:email
-/SECRET_PATH/sub/:email
-/SECRET_PATH/qr
+```bash
+npm install
+cp .env.example .env
+nano .env
+npm start
 ```
 
-The backend calls only these panel endpoints:
+بعد از اجرا:
 
 ```text
-GET {PANEL_BASE_URL}/panel/api/clients/get/{email}
-GET {PANEL_BASE_URL}/panel/api/clients/subLinks/{subId}
+http://localhost:3000
 ```
 
-Raw sensitive client fields such as `uuid`, `password`, `auth`, and `subId` are not returned by `/api/user/:email`; only masked versions are returned. The `/sub/:email` endpoint still returns real config links because subscription clients need them.
+صفحه مستقیم کاربر:
 
-## Environment variables
+```text
+http://localhost:3000/u/USER_EMAIL_OR_ID
+```
 
-Create `.env` next to `docker-compose.yml`:
+لینک subscription:
+
+```text
+http://localhost:3000/sub/USER_EMAIL_OR_ID
+```
+
+## تنظیمات `.env`
 
 ```env
 PANEL_BASE_URL=https://host
 PANEL_API_TOKEN=Token
 PUBLIC_BASE_URL=https://sub.example.com
 PORT=3000
+SECRET_PATH=
+ACCESS_KEY=
+```
 
-# Optional hidden path prefix. Example: my-secret-path
+اگر `PANEL_API_TOKEN` را با `Bearer ` شروع کنی، برنامه همان را استفاده می‌کند. اگر فقط خود توکن را بگذاری، خودش `Bearer` را اضافه می‌کند.
+
+## Secret Path
+
+اگر بخواهی کل پروژه پشت یک مسیر مخفی باشد، مقدار `SECRET_PATH` را تنظیم کن:
+
+```env
 SECRET_PATH=my-secret-path
-
-# Optional but strongly recommended.
-ACCESS_KEY=your-long-random-key
+PUBLIC_BASE_URL=https://sub.example.com
 ```
 
-If `PANEL_API_TOKEN` already includes `Bearer`, the app keeps it. Otherwise it sends it as `Bearer <token>`.
+در این حالت آدرس‌ها این‌طوری می‌شوند:
 
-## Run with Docker Compose
+```text
+https://sub.example.com/my-secret-path/
+https://sub.example.com/my-secret-path/u/USER_EMAIL_OR_ID
+https://sub.example.com/my-secret-path/sub/USER_EMAIL_OR_ID
+https://sub.example.com/my-secret-path/sub/USER_EMAIL_OR_ID?format=raw
+```
+
+آدرس‌های بدون secret path، مثل این‌ها، دیگر صفحه اصلی یا API را نشان نمی‌دهند:
+
+```text
+https://sub.example.com/
+https://sub.example.com/u/USER_EMAIL_OR_ID
+https://sub.example.com/sub/USER_EMAIL_OR_ID
+```
+
+نکته: `/healthz` عمومی می‌ماند تا Docker healthcheck و reverse proxy بتوانند سرویس را چک کنند. این endpoint داده‌ی حساسی برنمی‌گرداند.
+
+## Access Key
+
+اگر `ACCESS_KEY` را فعال کنی، آدرس‌ها باید کلید داشته باشند:
+
+```env
+ACCESS_KEY=YOUR_LONG_RANDOM_KEY
+```
+
+نمونه:
+
+```text
+https://sub.example.com/my-secret-path/u/USER?key=YOUR_LONG_RANDOM_KEY
+https://sub.example.com/my-secret-path/sub/USER?key=YOUR_LONG_RANDOM_KEY
+```
+
+همچنین می‌توانی برای درخواست‌های API از header استفاده کنی:
+
+```text
+x-access-key: YOUR_LONG_RANDOM_KEY
+```
+
+پیشنهاد جدی: `SECRET_PATH` امنیت کامل نیست؛ فقط مسیر را غیرقابل‌حدس‌تر می‌کند. برای production بهتر است `ACCESS_KEY` را هم فعال نگه داری.
+
+## اجرای Docker
+
+1. فایل env را بساز:
 
 ```bash
-docker compose down --rmi local --volumes --remove-orphans
-docker compose build --no-cache --pull
-docker compose up -d
+cp .env.docker.example .env
+nano .env
 ```
 
-Check logs:
+2. مقدارها را کامل کن:
+
+```env
+PANEL_BASE_URL=https://host
+PANEL_API_TOKEN=Token
+PUBLIC_BASE_URL=https://sub.example.com
+PORT=3000
+SECRET_PATH=my-secret-path
+ACCESS_KEY=یک-کلید-اختیاری-ولی-پیشنهادی
+```
+
+3. اجرا:
 
 ```bash
-docker logs -f v2-sub-page
+docker compose up -d --build
 ```
 
-Healthcheck:
+4. تست:
 
 ```bash
 curl http://localhost:3000/healthz
 ```
 
-Expected response:
-
-```json
-{"ok":true,"service":"v2-sub-page"}
-```
-
-## URLs
-
-If `SECRET_PATH=my-secret-path` and `ACCESS_KEY=your-long-random-key`:
+اگر `SECRET_PATH=my-secret-path` باشد، آدرس صفحه:
 
 ```text
-https://sub.example.com/my-secret-path/u/EMAIL?key=your-long-random-key
-https://sub.example.com/my-secret-path/sub/EMAIL?key=your-long-random-key
-https://sub.example.com/my-secret-path/sub/EMAIL?format=raw&key=your-long-random-key
+http://localhost:3000/my-secret-path/u/EMAIL
 ```
 
-If `SECRET_PATH` is set, `/` intentionally returns 404.
+آدرس subscription:
 
-## Run locally without Docker
+```text
+http://localhost:3000/my-secret-path/sub/EMAIL
+```
+
+اگر `ACCESS_KEY` گذاشته‌ای:
+
+```text
+http://localhost:3000/my-secret-path/u/EMAIL?key=ACCESS_KEY
+http://localhost:3000/my-secret-path/sub/EMAIL?key=ACCESS_KEY
+```
+
+## Dockerfile
+
+```dockerfile
+FROM node:20-alpine AS deps
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci --omit=dev
+
+FROM node:20-alpine AS runner
+
+ENV NODE_ENV=production
+WORKDIR /app
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY package*.json ./
+COPY server.js ./
+COPY public ./public
+
+USER node
+
+EXPOSE 3000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+
+CMD ["node", "server.js"]
+```
+
+## docker-compose.yml
+
+```yaml
+services:
+  v2-sub-page:
+    build: .
+    container_name: v2-sub-page
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "3000:3000"
+```
+
+## پشت Nginx یا Caddy
+
+برای production بهتر است container فقط روی سرور داخلی اجرا شود و دامنه HTTPS را با reverse proxy به آن وصل کنی. در این حالت `PUBLIC_BASE_URL` باید همان دامنه نهایی باشد، مثلاً:
+
+```env
+PUBLIC_BASE_URL=https://sub.example.com
+SECRET_PATH=my-secret-path
+```
+
+نمونه Nginx:
+
+```nginx
+server {
+  server_name sub.example.com;
+
+  location / {
+    proxy_pass http://127.0.0.1:3000;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+}
+```
+
+## دیپلوی سریع با PM2
 
 ```bash
-npm ci
-PANEL_BASE_URL=https://host \
-PANEL_API_TOKEN=Token \
-PUBLIC_BASE_URL=http://localhost:3000 \
-SECRET_PATH=my-secret-path \
-ACCESS_KEY=your-long-random-key \
-npm start
+npm i -g pm2
+pm2 start server.js --name v2-sub-page
+pm2 save
 ```
 
-## Smoke test
+## نکات امنیتی
 
-This project includes a mock-panel smoke test. It does not call your real panel.
+- این پروژه توکن پنل را در مرورگر ارسال نمی‌کند.
+- بهتر است پروژه پشت HTTPS اجرا شود.
+- برای جلوگیری از حدس‌زدن ایمیل/شناسه کاربران، `ACCESS_KEY` را فعال کن.
+- `SECRET_PATH` را عمومی منتشر نکن.
+- در UI، مقدارهای حساس مثل UUID، password، auth و subId به صورت mask شده نمایش داده می‌شوند.
+- اگر می‌خواهی مقدارهای حساس کامل نمایش داده شوند، تابع `mask` و `renderDetails` را تغییر بده.
+
+## لینک کلاینت‌ها
+
+- v2rayN: https://github.com/2dust/v2rayN/releases
+- v2rayNG: https://github.com/2dust/v2rayNG/releases
+- V2Box Android: https://play.google.com/store/apps/details?id=dev.hexasoftware.v2box
+- V2Box iOS/macOS: https://apps.apple.com/us/app/v2box-v2ray-client/id6446814690
+- Streisand iOS: https://apps.apple.com/us/app/streisand/id6450534064
+- Hiddify: https://github.com/hiddify/hiddify-app/releases
+- V2Ray Core: https://github.com/v2fly/v2ray-core/releases
+
+
+### Fix note: no dotenv dependency in Docker
+
+This project does not import `dotenv` at runtime. In Docker, variables are injected by `docker-compose.yml` through `env_file: .env`. If you run without Docker, export environment variables yourself or use Node's `--env-file` support:
 
 ```bash
-npm ci
-npm test
+node --env-file=.env server.js
 ```
 
-The test validates:
 
-- server startup
-- `/healthz`
-- secret path behavior
-- access key behavior
-- backend panel proxying
-- subscription output
-- QR endpoint
-- no leakage of raw `uuid`, `password`, `auth`, or `subId` from the browser API response
 
-## Docker troubleshooting
+## رفع مشکل نصب Docker / npm
 
-If you see an error like:
+در این نسخه عمداً `package-lock.json` حذف شده و Dockerfile فقط `package.json` را کپی می‌کند. دلیلش این است که lockfile قبلی در یک محیط دارای registry داخلی ساخته شده بود و روی سرورهای بیرونی ممکن بود `npm ci` نصب ناقص انجام دهد و خطاهایی مثل این بدهد:
 
 ```text
 Cannot find package '/app/node_modules/express/index.js'
 ```
 
-it means the container did not get a valid `node_modules` install. Use the clean rebuild command:
+برای build تمیز از این دستور استفاده کن:
 
 ```bash
 docker compose down --rmi local --volumes --remove-orphans
+docker builder prune -f
 docker compose build --no-cache --pull
 docker compose up -d
 ```
 
-Also make sure your compose file does not mount the project over `/app` like this:
+در `docker-compose.yml` هیچ volumeای مثل `.:/app` نباید باشد؛ چون باعث می‌شود `node_modules` نصب‌شده داخل image مخفی شود.
 
-```yaml
-volumes:
-  - .:/app
+Dockerfile از registry عمومی npm استفاده می‌کند:
+
+```text
+https://registry.npmjs.org/
 ```
 
-That kind of bind mount can hide the `node_modules` installed during image build and cause the exact `express/index.js` error.
-
-This project's `docker-compose.yml` intentionally has no `volumes` section.
+و dependencyها را با import واقعی async تست می‌کند، نه تست ظاهری.

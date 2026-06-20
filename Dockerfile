@@ -1,11 +1,19 @@
-FROM node:20-alpine
+FROM node:20.20.2-bookworm-slim
 
-ENV NODE_ENV=production
+ENV NODE_ENV=production \
+    NPM_CONFIG_REGISTRY=https://registry.npmjs.org/ \
+    NPM_CONFIG_FUND=false \
+    NPM_CONFIG_AUDIT=false \
+    NPM_CONFIG_UPDATE_NOTIFIER=false
+
 WORKDIR /app
 
-COPY package.json package-lock.json ./
-RUN npm ci --omit=dev --no-audit --no-fund \
-  && node -e "import('express'); import('helmet'); import('qrcode'); console.log('dependencies ok')" \
+COPY package.json .npmrc ./
+
+# Do not use a package-lock generated on another/private registry.
+# Install from the public npm registry inside the image, then verify imports properly.
+RUN npm install --omit=dev --no-package-lock --no-audit --no-fund \
+  && node --input-type=module -e "await import('express'); await import('helmet'); await import('qrcode'); console.log('dependencies ok')" \
   && npm cache clean --force
 
 COPY server.js ./

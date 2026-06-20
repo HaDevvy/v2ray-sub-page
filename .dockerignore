@@ -1,9 +1,9 @@
 node_modules
+package-lock.json
 npm-debug.log
+.env
 .git
 .gitignore
-.env
 *.zip
 *.tar.gz
 .DS_Store
-coverage
