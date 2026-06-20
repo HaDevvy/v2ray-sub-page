@@ -1,8 +1,13 @@
 const $ = (selector) => document.querySelector(selector);
 const params = new URLSearchParams(location.search);
-const email = decodeURIComponent(location.pathname.split('/').pop() || '');
+const pathParts = location.pathname.split('/').filter(Boolean);
+const uIndex = pathParts.lastIndexOf('u');
+const appBasePath = uIndex > 0 ? `/${pathParts.slice(0, uIndex).join('/')}` : '';
+const email = decodeURIComponent(uIndex >= 0 ? pathParts.slice(uIndex + 1).join('/') : pathParts.at(-1) || '');
 const key = params.get('key');
 const keyQuery = key ? `?key=${encodeURIComponent(key)}` : '';
+
+const withBase = (pathname) => `${appBasePath}${pathname.startsWith('/') ? pathname : `/${pathname}`}`;
 
 const formatBytes = (bytes = 0) => {
   const value = Number(bytes || 0);
@@ -59,6 +64,7 @@ function renderDetails(data) {
     ['Comment', c.comment || '-'],
     ['Reset', c.reset],
     ['Inbound IDs', (data.inboundIds || []).join(', ') || '-'],
+    ['Secret Path', data.secretPath || '/'],
     ['Created At', formatTime(c.createdAt)],
     ['Updated At', formatTime(c.updatedAt)]
   ];
@@ -84,7 +90,7 @@ function renderConfigs(links) {
 
 async function init() {
   try {
-    const response = await fetch(`/api/user/${encodeURIComponent(email)}${keyQuery}`, { cache: 'no-store' });
+    const response = await fetch(withBase(`/api/user/${encodeURIComponent(email)}${keyQuery}`), { cache: 'no-store' });
     const payload = await response.json();
     if (!response.ok || !payload.success) throw new Error(payload.msg || 'خطا در دریافت اطلاعات');
 
@@ -97,7 +103,7 @@ async function init() {
     $('#subscriptionUrl').value = data.subscriptionUrl;
     $('#openSub').href = data.subscriptionUrl;
     $('#openRawSub').href = data.rawSubscriptionUrl;
-    $('#subQr').src = `/qr?text=${encodeURIComponent(data.subscriptionUrl)}${key ? `&key=${encodeURIComponent(key)}` : ''}`;
+    $('#subQr').src = withBase(`/qr?text=${encodeURIComponent(data.subscriptionUrl)}${key ? `&key=${encodeURIComponent(key)}` : ''}`);
     $('#copyAll').addEventListener('click', () => copyText(data.links.map((item) => item.url).join('\n')));
 
     renderConfigs(data.links);

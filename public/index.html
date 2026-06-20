@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>صفحه اشتراک V2Ray</title>
-  <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
   <main class="shell center-shell">
@@ -22,13 +22,18 @@
     </section>
   </main>
   <script>
+    function currentBasePath() {
+      const path = location.pathname.replace(/\/+$/, '');
+      return path === '/' ? '' : path;
+    }
+
     document.querySelector('#lookupForm').addEventListener('submit', (event) => {
       event.preventDefault();
       const email = document.querySelector('#email').value.trim();
       if (!email) return;
       const params = new URLSearchParams(location.search);
       const key = params.get('key');
-      location.href = `/u/${encodeURIComponent(email)}${key ? `?key=${encodeURIComponent(key)}` : ''}`;
+      location.href = `${currentBasePath()}/u/${encodeURIComponent(email)}${key ? `?key=${encodeURIComponent(key)}` : ''}`;
     });
   </script>
 </body>

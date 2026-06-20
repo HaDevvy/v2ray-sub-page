@@ -10,10 +10,18 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
-const PANEL_BASE_URL = (process.env.PANEL_BASE_URL || '').replace(/\/$/, '');
+const PANEL_BASE_URL = (process.env.PANEL_BASE_URL || '').replace(/\/+$/, '');
 const PANEL_API_TOKEN = process.env.PANEL_API_TOKEN || '';
-const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || `http://localhost:${PORT}`).replace(/\/$/, '');
+const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || `http://localhost:${PORT}`).replace(/\/+$/, '');
 const ACCESS_KEY = process.env.ACCESS_KEY || '';
+
+function normalizeSecretPath(value) {
+  if (!value) return '';
+  const clean = String(value).trim().replace(/^\/+/, '').replace(/\/+$/, '');
+  return clean ? `/${clean}` : '';
+}
+
+const SECRET_PATH = normalizeSecretPath(process.env.SECRET_PATH);
 
 if (!PANEL_BASE_URL || !PANEL_API_TOKEN) {
   console.warn('[config] PANEL_BASE_URL and PANEL_API_TOKEN should be set in .env');
@@ -37,7 +45,6 @@ app.use(
     }
   })
 );
-app.use(express.static(path.join(__dirname, 'public'), { extensions: ['html'] }));
 
 const protocolLabels = {
   vmess: 'VMess',
@@ -93,6 +100,18 @@ function normalizeClientResponse(payload) {
   return payload.obj;
 }
 
+function publicUrl(pathname, query = {}) {
+  const cleanPath = String(pathname || '/').startsWith('/') ? String(pathname || '/') : `/${pathname}`;
+  const params = new URLSearchParams();
+
+  Object.entries(query).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') params.set(key, String(value));
+  });
+
+  const qs = params.toString();
+  return `${PUBLIC_BASE_URL}${SECRET_PATH}${cleanPath}${qs ? `?${qs}` : ''}`;
+}
+
 async function panelGet(pathname) {
   const url = `${PANEL_BASE_URL}${pathname}`;
   const response = await fetch(url, {
@@ -143,9 +162,9 @@ async function loadUser(email) {
   }));
 
   const publicEmail = encodeURIComponent(email);
-  const keyPart = ACCESS_KEY ? `?key=${encodeURIComponent(ACCESS_KEY)}` : '';
-  const subscriptionUrl = `${PUBLIC_BASE_URL}/sub/${publicEmail}${keyPart}`;
-  const rawSubscriptionUrl = `${PUBLIC_BASE_URL}/sub/${publicEmail}?format=raw${ACCESS_KEY ? `&key=${encodeURIComponent(ACCESS_KEY)}` : ''}`;
+  const key = ACCESS_KEY || undefined;
+  const subscriptionUrl = publicUrl(`/sub/${publicEmail}`, { key });
+  const rawSubscriptionUrl = publicUrl(`/sub/${publicEmail}`, { format: 'raw', key });
 
   return {
     client: {
@@ -160,6 +179,7 @@ async function loadUser(email) {
     links,
     subscriptionUrl,
     rawSubscriptionUrl,
+    secretPath: SECRET_PATH,
     updatedAt: new Date().toISOString()
   };
 }
@@ -170,19 +190,41 @@ function toSubscriptionBody(links, format = 'base64') {
   return Buffer.from(plain, 'utf8').toString('base64');
 }
 
+// Keep healthcheck public for Docker/reverse proxies. It returns no sensitive data.
 app.get('/healthz', (req, res) => {
-  res.json({ ok: true });
+  res.json({ ok: true, service: 'v2-sub-page' });
 });
 
-app.get('/', (req, res) => {
+// When a secret path is configured, do not expose the root page.
+app.get('/', (req, res, next) => {
+  if (SECRET_PATH) return res.status(404).sendFile(path.join(__dirname, 'public', '404.html'));
+  return next();
+});
+
+// Redirect /secret to /secret/ so relative assets resolve correctly in browsers.
+if (SECRET_PATH) {
+  app.use((req, res, next) => {
+    const requestPath = req.originalUrl.split('?')[0];
+    if (requestPath === SECRET_PATH) {
+      const query = req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '';
+      return res.redirect(308, `${SECRET_PATH}/${query}`);
+    }
+    return next();
+  });
+}
+
+const router = express.Router();
+router.use(express.static(path.join(__dirname, 'public'), { extensions: ['html'] }));
+
+router.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.get('/u/:email', (req, res) => {
+router.get('/u/:email', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'user.html'));
 });
 
-app.get('/api/user/:email', requireAccessKey, async (req, res) => {
+router.get('/api/user/:email', requireAccessKey, async (req, res) => {
   try {
     const data = await loadUser(req.params.email);
     res.set('Cache-Control', 'no-store');
@@ -193,7 +235,7 @@ app.get('/api/user/:email', requireAccessKey, async (req, res) => {
   }
 });
 
-app.get('/sub/:email', requireAccessKey, async (req, res) => {
+router.get('/sub/:email', requireAccessKey, async (req, res) => {
   try {
     const data = await loadUser(req.params.email);
     const format = req.query.format === 'raw' ? 'raw' : 'base64';
@@ -206,7 +248,7 @@ app.get('/sub/:email', requireAccessKey, async (req, res) => {
   }
 });
 
-app.get('/qr', requireAccessKey, async (req, res) => {
+router.get('/qr', requireAccessKey, async (req, res) => {
   const text = String(req.query.text || '');
   if (!text) return res.status(400).send('text is required');
   if (text.length > 4096) return res.status(413).send('text is too long');
@@ -225,10 +267,14 @@ app.get('/qr', requireAccessKey, async (req, res) => {
   }
 });
 
+app.use(SECRET_PATH || '/', router);
+
 app.use((req, res) => {
   res.status(404).sendFile(path.join(__dirname, 'public', '404.html'));
 });
 
 app.listen(PORT, () => {
+  const publicRoot = `${PUBLIC_BASE_URL}${SECRET_PATH || ''}/`;
   console.log(`V2 subscription page is running on http://localhost:${PORT}`);
+  console.log(`Public root: ${publicRoot}`);
 });

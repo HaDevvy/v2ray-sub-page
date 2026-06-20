@@ -13,9 +13,11 @@
 - خروجی خام newline-separated: `/sub/:email?format=raw`
 - QR Code برای subscription
 - نگه‌داشتن توکن در `.env`
+- گزینه‌ی `SECRET_PATH` برای قرار دادن کل پروژه پشت مسیر مخفی
 - گزینه‌ی `ACCESS_KEY` برای محدودکردن دسترسی به لینک‌ها
+- آماده برای Docker و Docker Compose
 
-## نصب
+## نصب معمولی
 
 ```bash
 npm install
@@ -49,76 +51,80 @@ PANEL_BASE_URL=https://host
 PANEL_API_TOKEN=Token
 PUBLIC_BASE_URL=https://sub.example.com
 PORT=3000
+SECRET_PATH=
 ACCESS_KEY=
 ```
 
 اگر `PANEL_API_TOKEN` را با `Bearer ` شروع کنی، برنامه همان را استفاده می‌کند. اگر فقط خود توکن را بگذاری، خودش `Bearer` را اضافه می‌کند.
 
-اگر `ACCESS_KEY` را فعال کنی، آدرس‌ها باید این‌طوری باشند:
+## Secret Path
+
+اگر بخواهی کل پروژه پشت یک مسیر مخفی باشد، مقدار `SECRET_PATH` را تنظیم کن:
+
+```env
+SECRET_PATH=my-secret-path
+PUBLIC_BASE_URL=https://sub.example.com
+```
+
+در این حالت آدرس‌ها این‌طوری می‌شوند:
 
 ```text
-https://sub.example.com/u/USER?key=YOUR_SECRET
-https://sub.example.com/sub/USER?key=YOUR_SECRET
+https://sub.example.com/my-secret-path/
+https://sub.example.com/my-secret-path/u/USER_EMAIL_OR_ID
+https://sub.example.com/my-secret-path/sub/USER_EMAIL_OR_ID
+https://sub.example.com/my-secret-path/sub/USER_EMAIL_OR_ID?format=raw
 ```
 
-## دیپلوی سریع با PM2
+آدرس‌های بدون secret path، مثل این‌ها، دیگر صفحه اصلی یا API را نشان نمی‌دهند:
 
-```bash
-npm i -g pm2
-pm2 start server.js --name v2-sub-page
-pm2 save
+```text
+https://sub.example.com/
+https://sub.example.com/u/USER_EMAIL_OR_ID
+https://sub.example.com/sub/USER_EMAIL_OR_ID
 ```
 
-## نمونه Nginx Reverse Proxy
+نکته: `/healthz` عمومی می‌ماند تا Docker healthcheck و reverse proxy بتوانند سرویس را چک کنند. این endpoint داده‌ی حساسی برنمی‌گرداند.
 
-```nginx
-server {
-  server_name sub.example.com;
+## Access Key
 
-  location / {
-    proxy_pass http://127.0.0.1:3000;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-  }
-}
+اگر `ACCESS_KEY` را فعال کنی، آدرس‌ها باید کلید داشته باشند:
+
+```env
+ACCESS_KEY=YOUR_LONG_RANDOM_KEY
 ```
 
-## نکات امنیتی
+نمونه:
 
-- این پروژه توکن پنل را در مرورگر ارسال نمی‌کند.
-- بهتر است پروژه پشت HTTPS اجرا شود.
-- برای جلوگیری از حدس‌زدن ایمیل/شناسه کاربران، `ACCESS_KEY` را فعال کن یا مسیرها را پشت لاگین خودت قرار بده.
-- در UI، مقدارهای حساس مثل UUID، password، auth و subId به صورت mask شده نمایش داده می‌شوند.
-- اگر می‌خواهی مقدارهای حساس کامل نمایش داده شوند، تابع `mask` و `renderDetails` را تغییر بده.
+```text
+https://sub.example.com/my-secret-path/u/USER?key=YOUR_LONG_RANDOM_KEY
+https://sub.example.com/my-secret-path/sub/USER?key=YOUR_LONG_RANDOM_KEY
+```
 
-## لینک کلاینت‌ها
+همچنین می‌توانی برای درخواست‌های API از header استفاده کنی:
 
-- v2rayN: https://github.com/2dust/v2rayN/releases
-- v2rayNG: https://github.com/2dust/v2rayNG/releases
-- V2Box Android: https://play.google.com/store/apps/details?id=dev.hexasoftware.v2box
-- V2Box iOS/macOS: https://apps.apple.com/us/app/v2box-v2ray-client/id6446814690
-- Streisand iOS: https://apps.apple.com/us/app/streisand/id6450534064
-- Hiddify: https://github.com/hiddify/hiddify-app/releases
-- V2Ray Core: https://github.com/v2fly/v2ray-core/releases
+```text
+x-access-key: YOUR_LONG_RANDOM_KEY
+```
+
+پیشنهاد جدی: `SECRET_PATH` امنیت کامل نیست؛ فقط مسیر را غیرقابل‌حدس‌تر می‌کند. برای production بهتر است `ACCESS_KEY` را هم فعال نگه داری.
 
 ## اجرای Docker
 
-1. فایل env را بسازید:
+1. فایل env را بساز:
 
 ```bash
 cp .env.docker.example .env
 nano .env
 ```
 
-2. مقدارها را کامل کنید:
+2. مقدارها را کامل کن:
 
 ```env
 PANEL_BASE_URL=https://host
 PANEL_API_TOKEN=Token
 PUBLIC_BASE_URL=https://sub.example.com
 PORT=3000
+SECRET_PATH=my-secret-path
 ACCESS_KEY=یک-کلید-اختیاری-ولی-پیشنهادی
 ```
 
@@ -134,30 +140,117 @@ docker compose up -d --build
 curl http://localhost:3000/healthz
 ```
 
-آدرس صفحه:
+اگر `SECRET_PATH=my-secret-path` باشد، آدرس صفحه:
 
 ```text
-http://localhost:3000/u/EMAIL
+http://localhost:3000/my-secret-path/u/EMAIL
 ```
 
 آدرس subscription:
 
 ```text
-http://localhost:3000/sub/EMAIL
+http://localhost:3000/my-secret-path/sub/EMAIL
 ```
 
-اگر `ACCESS_KEY` گذاشته‌اید:
+اگر `ACCESS_KEY` گذاشته‌ای:
 
 ```text
-http://localhost:3000/u/EMAIL?key=ACCESS_KEY
-http://localhost:3000/sub/EMAIL?key=ACCESS_KEY
+http://localhost:3000/my-secret-path/u/EMAIL?key=ACCESS_KEY
+http://localhost:3000/my-secret-path/sub/EMAIL?key=ACCESS_KEY
 ```
 
-### پشت Nginx یا Caddy
+## Dockerfile
 
-برای production بهتر است container فقط روی سرور داخلی اجرا شود و دامنه HTTPS را با reverse proxy به آن وصل کنید. در این حالت `PUBLIC_BASE_URL` باید همان دامنه نهایی باشد، مثلاً:
+```dockerfile
+FROM node:20-alpine AS deps
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci --omit=dev
+
+FROM node:20-alpine AS runner
+
+ENV NODE_ENV=production
+WORKDIR /app
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY package*.json ./
+COPY server.js ./
+COPY public ./public
+
+USER node
+
+EXPOSE 3000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+
+CMD ["node", "server.js"]
+```
+
+## docker-compose.yml
+
+```yaml
+services:
+  v2-sub-page:
+    build: .
+    container_name: v2-sub-page
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "3000:3000"
+```
+
+## پشت Nginx یا Caddy
+
+برای production بهتر است container فقط روی سرور داخلی اجرا شود و دامنه HTTPS را با reverse proxy به آن وصل کنی. در این حالت `PUBLIC_BASE_URL` باید همان دامنه نهایی باشد، مثلاً:
 
 ```env
 PUBLIC_BASE_URL=https://sub.example.com
+SECRET_PATH=my-secret-path
 ```
 
+نمونه Nginx:
+
+```nginx
+server {
+  server_name sub.example.com;
+
+  location / {
+    proxy_pass http://127.0.0.1:3000;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+}
+```
+
+## دیپلوی سریع با PM2
+
+```bash
+npm i -g pm2
+pm2 start server.js --name v2-sub-page
+pm2 save
+```
+
+## نکات امنیتی
+
+- این پروژه توکن پنل را در مرورگر ارسال نمی‌کند.
+- بهتر است پروژه پشت HTTPS اجرا شود.
+- برای جلوگیری از حدس‌زدن ایمیل/شناسه کاربران، `ACCESS_KEY` را فعال کن.
+- `SECRET_PATH` را عمومی منتشر نکن.
+- در UI، مقدارهای حساس مثل UUID، password، auth و subId به صورت mask شده نمایش داده می‌شوند.
+- اگر می‌خواهی مقدارهای حساس کامل نمایش داده شوند، تابع `mask` و `renderDetails` را تغییر بده.
+
+## لینک کلاینت‌ها
+
+- v2rayN: https://github.com/2dust/v2rayN/releases
+- v2rayNG: https://github.com/2dust/v2rayNG/releases
+- V2Box Android: https://play.google.com/store/apps/details?id=dev.hexasoftware.v2box
+- V2Box iOS/macOS: https://apps.apple.com/us/app/v2box-v2ray-client/id6446814690
+- Streisand iOS: https://apps.apple.com/us/app/streisand/id6450534064
+- Hiddify: https://github.com/hiddify/hiddify-app/releases
+- V2Ray Core: https://github.com/v2fly/v2ray-core/releases
