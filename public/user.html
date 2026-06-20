@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>اشتراک کاربر</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <a class="brand" href="/">V2 Sub</a>
+      <span id="statusPill" class="status-pill">در حال دریافت...</span>
+    </header>
+
+    <section class="card hero compact">
+      <div>
+        <div class="badge">Private Subscription</div>
+        <h1 id="title">صفحه اشتراک</h1>
+        <p id="summary">در حال دریافت اطلاعات کاربر از بک‌اند...</p>
+      </div>
+      <div class="qr-box">
+        <img id="subQr" alt="QR subscription" />
+        <small>اسکن برای افزودن subscription</small>
+      </div>
+    </section>
+
+    <section id="actions" class="grid two hidden">
+      <div class="card action-card">
+        <h2>لینک Subscription</h2>
+        <p>این لینک را در v2rayN، v2rayNG، V2Box، Streisand یا Hiddify به‌عنوان subscription اضافه کن.</p>
+        <div class="copy-row">
+          <input id="subscriptionUrl" readonly />
+          <button data-copy="#subscriptionUrl">کپی</button>
+        </div>
+        <div class="button-row">
+          <a id="openSub" class="button ghost" target="_blank" rel="noreferrer">باز کردن خروجی Base64</a>
+          <a id="openRawSub" class="button ghost" target="_blank" rel="noreferrer">خروجی خام</a>
+        </div>
+      </div>
+      <div class="card action-card">
+        <h2>کپی همه کانفیگ‌ها</h2>
+        <p>اگر اپلیکیشن subscription را قبول نکرد، همه کانفیگ‌ها را یکجا کپی و دستی import کن.</p>
+        <button id="copyAll" class="button full">کپی همه لینک‌ها</button>
+      </div>
+    </section>
+
+    <section id="configsCard" class="card hidden">
+      <div class="section-head">
+        <h2>لینک کانفیگ‌ها</h2>
+        <span id="configCount" class="muted"></span>
+      </div>
+      <div id="configs" class="configs"></div>
+    </section>
+
+    <section id="detailsCard" class="card hidden">
+      <div class="section-head">
+        <h2>جزئیات کاربر</h2>
+        <span class="muted">مقادیر حساس در این جدول mask شده‌اند.</span>
+      </div>
+      <div id="details" class="details"></div>
+    </section>
+
+    <section class="card apps-card">
+      <h2>دانلود کلاینت‌های پیشنهادی</h2>
+      <p>لینک‌ها را از منابع رسمی یا صفحه‌های شناخته‌شده بگذار. در فایل <code>public/user.html</code> می‌توانی این لیست را تغییر بدهی.</p>
+      <div class="apps-grid">
+        <a href="https://github.com/2dust/v2rayN/releases" target="_blank" rel="noreferrer">v2rayN — Windows / macOS / Linux</a>
+        <a href="https://github.com/2dust/v2rayNG/releases" target="_blank" rel="noreferrer">v2rayNG — Android APK</a>
+        <a href="https://play.google.com/store/apps/details?id=dev.hexasoftware.v2box" target="_blank" rel="noreferrer">V2Box — Google Play</a>
+        <a href="https://apps.apple.com/us/app/v2box-v2ray-client/id6446814690" target="_blank" rel="noreferrer">V2Box — App Store</a>
+        <a href="https://apps.apple.com/us/app/streisand/id6450534064" target="_blank" rel="noreferrer">Streisand — iOS / iPadOS</a>
+        <a href="https://github.com/hiddify/hiddify-app/releases" target="_blank" rel="noreferrer">Hiddify — Multi-platform</a>
+        <a href="https://github.com/v2fly/v2ray-core/releases" target="_blank" rel="noreferrer">V2Ray Core — Advanced</a>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" role="status"></div>
+  <script src="/user.js"></script>
+</body>
+</html>

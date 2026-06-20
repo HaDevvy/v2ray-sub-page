@@ -1,0 +1,9 @@
+services:
+  v2-sub-page:
+    build: .
+    container_name: v2-sub-page
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "3000:3000"
