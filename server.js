@@ -291,6 +291,6 @@ app.use((req, res) => {
 
 app.listen(PORT, () => {
   const publicRoot = `${PUBLIC_BASE_URL}${SECRET_PATH || ''}/`;
-  console.log(`V2 subscription page is running on http://localhost:${PORT}`);
+  console.log(`Subscription portal is running on http://localhost:${PORT}`);
   console.log(`Public root: ${publicRoot}`);
 });

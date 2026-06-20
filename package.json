@@ -1,7 +1,7 @@
 {
   "name": "v2-sub-page",
   "version": "1.0.0",
-  "description": "Lightweight V2Ray subscription landing page with backend-only panel API calls.",
+  "description": "Production-ready subscription portal with backend-only panel API calls.",
   "type": "module",
   "main": "server.js",
   "scripts": {

@@ -1,72 +1,33 @@
-# V2 Sub Page
+# Subscription Portal
 
-یک پروژه‌ی سبک برای ساخت صفحه‌ی subscription برای کاربرهای پنل. توکن پنل فقط در بک‌اند نگهداری می‌شود و فرانت‌اند مستقیم به API پنل درخواست نمی‌زند.
+یک پنل اشتراک سبک و آماده‌ی دیپلوی برای نمایش لینک‌های اتصال کاربران. درخواست‌های پنل فقط در بک‌اند انجام می‌شوند، توکن پنل در مرورگر ارسال نمی‌شود و خروجی Subscription برای کلاینت‌هایی مثل v2rayN، v2rayNG، V2Box، Streisand و Hiddify قابل استفاده است.
 
-## امکانات
+## قابلیت‌ها
 
-- دریافت اطلاعات کاربر از endpoint پنل: `/panel/api/clients/get/{email}`
-- دریافت لینک‌های کانفیگ از endpoint پنل: `/panel/api/clients/subLinks/{subId}`
-- نمایش صفحه‌ی زیبا، سبک، RTL و responsive
-- نمایش لینک‌های کانفیگ و جزئیات کاربر
-- ساخت لینک subscription قابل import در کلاینت‌های رایج
-- خروجی Base64 برای subscription: `/sub/:email`
-- خروجی خام newline-separated: `/sub/:email?format=raw`
-- QR Code برای subscription
-- نگه‌داشتن توکن در `.env`
-- گزینه‌ی `SECRET_PATH` برای قرار دادن کل پروژه پشت مسیر مخفی
-- گزینه‌ی `ACCESS_KEY` برای محدودکردن دسترسی به لینک‌ها
+- دریافت اطلاعات کاربر از پنل: `/panel/api/clients/get/{email}`
+- دریافت لینک‌های اتصال از پنل با `subId`: `/panel/api/clients/subLinks/{subId}`
+- نمایش وضعیت سرویس، مصرف ترافیک، سقف ترافیک، تاریخ انقضا و مشخصات کاربر
+- نمایش کانفیگ‌ها با امکان کپی تکی و کپی کامل
+- ساخت Subscription URL با خروجی Base64
+- پشتیبانی از خروجی خام newline-separated با `format=raw`
+- QR Code برای لینک اشتراک
+- پشتیبانی از `SECRET_PATH` برای قراردادن سرویس پشت مسیر اختصاصی
+- پشتیبانی از `ACCESS_KEY` برای محدودکردن دسترسی
 - آماده برای Docker و Docker Compose
+- محافظت از فیلدهای حساس در API داخلی؛ مقدارهای خام `uuid`، `password`، `auth` و `subId` به مرورگر ارسال نمی‌شوند.
 
-## نصب معمولی
+## ساختار مسیرها
 
-```bash
-npm install
-cp .env.example .env
-nano .env
-npm start
-```
-
-بعد از اجرا:
+بدون `SECRET_PATH`:
 
 ```text
-http://localhost:3000
+https://sub.example.com/
+https://sub.example.com/u/USER_EMAIL_OR_ID
+https://sub.example.com/sub/USER_EMAIL_OR_ID
+https://sub.example.com/sub/USER_EMAIL_OR_ID?format=raw
 ```
 
-صفحه مستقیم کاربر:
-
-```text
-http://localhost:3000/u/USER_EMAIL_OR_ID
-```
-
-لینک subscription:
-
-```text
-http://localhost:3000/sub/USER_EMAIL_OR_ID
-```
-
-## تنظیمات `.env`
-
-```env
-PANEL_BASE_URL=https://host
-PANEL_API_TOKEN=Token
-PUBLIC_BASE_URL=https://sub.example.com
-PORT=3000
-SECRET_PATH=
-ACCESS_KEY=
-```
-
-اگر `PANEL_API_TOKEN` را با `Bearer ` شروع کنی، برنامه همان را استفاده می‌کند. اگر فقط خود توکن را بگذاری، خودش `Bearer` را اضافه می‌کند.
-
-## Secret Path
-
-اگر بخواهی کل پروژه پشت یک مسیر مخفی باشد، مقدار `SECRET_PATH` را تنظیم کن:
-
-```env
-SECRET_PATH=my-secret-path
-PUBLIC_BASE_URL=https://sub.example.com
-```
-
-در این حالت آدرس‌ها این‌طوری می‌شوند:
+با `SECRET_PATH=my-secret-path`:
 
 ```text
 https://sub.example.com/my-secret-path/
@@ -75,49 +36,11 @@ https://sub.example.com/my-secret-path/sub/USER_EMAIL_OR_ID
 https://sub.example.com/my-secret-path/sub/USER_EMAIL_OR_ID?format=raw
 ```
 
-آدرس‌های بدون secret path، مثل این‌ها، دیگر صفحه اصلی یا API را نشان نمی‌دهند:
+مسیر `/healthz` عمومی می‌ماند تا Docker، reverse proxy یا uptime monitor بتواند سلامت سرویس را بررسی کند. این endpoint داده‌ی حساسی برنمی‌گرداند.
 
-```text
-https://sub.example.com/
-https://sub.example.com/u/USER_EMAIL_OR_ID
-https://sub.example.com/sub/USER_EMAIL_OR_ID
-```
+## تنظیمات محیطی
 
-نکته: `/healthz` عمومی می‌ماند تا Docker healthcheck و reverse proxy بتوانند سرویس را چک کنند. این endpoint داده‌ی حساسی برنمی‌گرداند.
-
-## Access Key
-
-اگر `ACCESS_KEY` را فعال کنی، آدرس‌ها باید کلید داشته باشند:
-
-```env
-ACCESS_KEY=YOUR_LONG_RANDOM_KEY
-```
-
-نمونه:
-
-```text
-https://sub.example.com/my-secret-path/u/USER?key=YOUR_LONG_RANDOM_KEY
-https://sub.example.com/my-secret-path/sub/USER?key=YOUR_LONG_RANDOM_KEY
-```
-
-همچنین می‌توانی برای درخواست‌های API از header استفاده کنی:
-
-```text
-x-access-key: YOUR_LONG_RANDOM_KEY
-```
-
-پیشنهاد جدی: `SECRET_PATH` امنیت کامل نیست؛ فقط مسیر را غیرقابل‌حدس‌تر می‌کند. برای production بهتر است `ACCESS_KEY` را هم فعال نگه داری.
-
-## اجرای Docker
-
-1. فایل env را بساز:
-
-```bash
-cp .env.docker.example .env
-nano .env
-```
-
-2. مقدارها را کامل کن:
+فایل `.env` را کنار `docker-compose.yml` یا ریشه پروژه قرار دهید:
 
 ```env
 PANEL_BASE_URL=https://host
@@ -125,60 +48,87 @@ PANEL_API_TOKEN=Token
 PUBLIC_BASE_URL=https://sub.example.com
 PORT=3000
 SECRET_PATH=my-secret-path
-ACCESS_KEY=یک-کلید-اختیاری-ولی-پیشنهادی
+ACCESS_KEY=YOUR_LONG_RANDOM_KEY
 ```
 
-3. اجرا:
+توضیحات:
+
+- `PANEL_BASE_URL`: آدرس پنل بدون `/` انتهایی.
+- `PANEL_API_TOKEN`: توکن پنل. اگر با `Bearer ` شروع شود همان مقدار استفاده می‌شود؛ در غیر این صورت برنامه `Bearer` را اضافه می‌کند.
+- `PUBLIC_BASE_URL`: دامنه نهایی که کاربر می‌بیند. برای QR و لینک اشتراک استفاده می‌شود.
+- `SECRET_PATH`: مسیر اختصاصی سرویس. اختیاری است، اما برای production پیشنهاد می‌شود.
+- `ACCESS_KEY`: کلید دسترسی. اختیاری است، اما برای production بهتر است فعال باشد.
+
+## اجرای Docker
 
 ```bash
+cp .env.docker.example .env
+nano .env
 docker compose up -d --build
 ```
 
-4. تست:
+تست سلامت:
 
 ```bash
 curl http://localhost:3000/healthz
 ```
 
-اگر `SECRET_PATH=my-secret-path` باشد، آدرس صفحه:
+اگر `SECRET_PATH` و `ACCESS_KEY` فعال باشند:
 
 ```text
-http://localhost:3000/my-secret-path/u/EMAIL
+http://localhost:3000/my-secret-path/u/USER?key=YOUR_LONG_RANDOM_KEY
+http://localhost:3000/my-secret-path/sub/USER?key=YOUR_LONG_RANDOM_KEY
 ```
 
-آدرس subscription:
+همچنین می‌توانید به‌جای query string، کلید را با header بفرستید:
 
 ```text
-http://localhost:3000/my-secret-path/sub/EMAIL
+x-access-key: YOUR_LONG_RANDOM_KEY
 ```
 
-اگر `ACCESS_KEY` گذاشته‌ای:
+## اجرای مستقیم بدون Docker
 
-```text
-http://localhost:3000/my-secret-path/u/EMAIL?key=ACCESS_KEY
-http://localhost:3000/my-secret-path/sub/EMAIL?key=ACCESS_KEY
+Node.js نسخه 18 یا بالاتر لازم است.
+
+```bash
+npm install
+node --env-file=.env server.js
 ```
 
-## Dockerfile
+یا با export کردن متغیرها:
+
+```bash
+export PANEL_BASE_URL=https://host
+export PANEL_API_TOKEN=Token
+export PUBLIC_BASE_URL=http://localhost:3000
+npm start
+```
+
+## Dockerfile فعلی
+
+این نسخه عمداً `package-lock.json` ندارد و Dockerfile فقط از `package.json` نصب می‌کند. دلیلش جلوگیری از مشکل lockfile ساخته‌شده با registry ناسازگار است.
 
 ```dockerfile
-FROM node:20-alpine AS deps
+FROM node:20.20.2-bookworm-slim
+
+ENV NODE_ENV=production \
+    NPM_CONFIG_REGISTRY=https://registry.npmjs.org/ \
+    NPM_CONFIG_FUND=false \
+    NPM_CONFIG_AUDIT=false \
+    NPM_CONFIG_UPDATE_NOTIFIER=false
 
 WORKDIR /app
 
-COPY package*.json ./
-RUN npm ci --omit=dev
+COPY package.json .npmrc ./
 
-FROM node:20-alpine AS runner
+RUN npm install --omit=dev --no-package-lock --no-audit --no-fund \
+  && node --input-type=module -e "await import('express'); await import('helmet'); await import('qrcode'); console.log('dependencies ok')" \
+  && npm cache clean --force
 
-ENV NODE_ENV=production
-WORKDIR /app
-
-COPY --from=deps /app/node_modules ./node_modules
-COPY package*.json ./
 COPY server.js ./
 COPY public ./public
 
+RUN chown -R node:node /app
 USER node
 
 EXPOSE 3000
@@ -194,7 +144,9 @@ CMD ["node", "server.js"]
 ```yaml
 services:
   v2-sub-page:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: v2-sub-page
     restart: unless-stopped
     env_file:
@@ -203,16 +155,11 @@ services:
       - "3000:3000"
 ```
 
-## پشت Nginx یا Caddy
+هیچ volumeای مثل `.:/app` تعریف نکنید؛ این کار می‌تواند `node_modules` داخل image را مخفی کند و باعث خطای `Cannot find package express` شود.
 
-برای production بهتر است container فقط روی سرور داخلی اجرا شود و دامنه HTTPS را با reverse proxy به آن وصل کنی. در این حالت `PUBLIC_BASE_URL` باید همان دامنه نهایی باشد، مثلاً:
+## Reverse Proxy
 
-```env
-PUBLIC_BASE_URL=https://sub.example.com
-SECRET_PATH=my-secret-path
-```
-
-نمونه Nginx:
+برای production بهتر است سرویس پشت HTTPS اجرا شود. نمونه Nginx:
 
 ```nginx
 server {
@@ -228,24 +175,22 @@ server {
 }
 ```
 
-## دیپلوی سریع با PM2
+در این حالت مقدار `PUBLIC_BASE_URL` باید دامنه نهایی باشد:
 
-```bash
-npm i -g pm2
-pm2 start server.js --name v2-sub-page
-pm2 save
+```env
+PUBLIC_BASE_URL=https://sub.example.com
 ```
 
 ## نکات امنیتی
 
-- این پروژه توکن پنل را در مرورگر ارسال نمی‌کند.
-- بهتر است پروژه پشت HTTPS اجرا شود.
-- برای جلوگیری از حدس‌زدن ایمیل/شناسه کاربران، `ACCESS_KEY` را فعال کن.
-- `SECRET_PATH` را عمومی منتشر نکن.
-- در UI، مقدارهای حساس مثل UUID، password، auth و subId به صورت mask شده نمایش داده می‌شوند.
-- اگر می‌خواهی مقدارهای حساس کامل نمایش داده شوند، تابع `mask` و `renderDetails` را تغییر بده.
+- توکن پنل در کد فرانت‌اند یا response مرورگر قرار نمی‌گیرد.
+- فیلدهای حساس کاربر در API داخلی sanitize می‌شوند.
+- `SECRET_PATH` امنیت کامل نیست؛ آن را همراه با `ACCESS_KEY` استفاده کنید.
+- سرویس را روی HTTPS منتشر کنید.
+- `PUBLIC_BASE_URL` را با دامنه واقعی production تنظیم کنید تا QR و لینک اشتراک درست ساخته شوند.
+- مقدارهای `.env` را commit نکنید.
 
-## لینک کلاینت‌ها
+## کلاینت‌های سازگار
 
 - v2rayN: https://github.com/2dust/v2rayN/releases
 - v2rayNG: https://github.com/2dust/v2rayNG/releases
@@ -255,40 +200,21 @@ pm2 save
 - Hiddify: https://github.com/hiddify/hiddify-app/releases
 - V2Ray Core: https://github.com/v2fly/v2ray-core/releases
 
+## تست
 
-### Fix note: no dotenv dependency in Docker
-
-This project does not import `dotenv` at runtime. In Docker, variables are injected by `docker-compose.yml` through `env_file: .env`. If you run without Docker, export environment variables yourself or use Node's `--env-file` support:
-
-```bash
-node --env-file=.env server.js
-```
-
-
-
-## رفع مشکل نصب Docker / npm
-
-در این نسخه عمداً `package-lock.json` حذف شده و Dockerfile فقط `package.json` را کپی می‌کند. دلیلش این است که lockfile قبلی در یک محیط دارای registry داخلی ساخته شده بود و روی سرورهای بیرونی ممکن بود `npm ci` نصب ناقص انجام دهد و خطاهایی مثل این بدهد:
-
-```text
-Cannot find package '/app/node_modules/express/index.js'
-```
-
-برای build تمیز از این دستور استفاده کن:
+برای اجرای smoke test:
 
 ```bash
-docker compose down --rmi local --volumes --remove-orphans
-docker builder prune -f
-docker compose build --no-cache --pull
-docker compose up -d
+npm install
+npm test
 ```
 
-در `docker-compose.yml` هیچ volumeای مثل `.:/app` نباید باشد؛ چون باعث می‌شود `node_modules` نصب‌شده داخل image مخفی شود.
+تست‌ها موارد زیر را بررسی می‌کنند:
 
-Dockerfile از registry عمومی npm استفاده می‌کند:
-
-```text
-https://registry.npmjs.org/
-```
-
-و dependencyها را با import واقعی async تست می‌کند، نه تست ظاهری.
+- routeهای اصلی
+- secret path
+- access key
+- proxy کردن درخواست‌های پنل از سمت بک‌اند
+- خروجی subscription
+- QR Code
+- عدم نشت فیلدهای حساس در API داخلی

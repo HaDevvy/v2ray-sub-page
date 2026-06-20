@@ -19,7 +19,7 @@ const formatBytes = (bytes = 0) => {
 
 const formatTime = (ms) => {
   const value = Number(ms || 0);
-  if (!value) return 'نامحدود / ثبت نشده';
+  if (!value) return 'نامحدود / ثبت‌نشده';
   try {
     return new Intl.DateTimeFormat('fa-IR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
   } catch {
@@ -36,7 +36,7 @@ function toast(message) {
 
 async function copyText(text) {
   await navigator.clipboard.writeText(text);
-  toast('کپی شد');
+  toast('در کلیپ‌بورد کپی شد');
 }
 
 function detailRow(label, value) {
@@ -46,33 +46,33 @@ function detailRow(label, value) {
 function renderDetails(data) {
   const c = data.client;
   const rows = [
-    ['ID', c.id],
-    ['Email', c.email],
-    ['Sub ID', c.subIdMasked || c.subId],
+    ['شناسه داخلی', c.id],
+    ['شناسه کاربر', c.email],
+    ['شناسه اشتراک', c.subIdMasked || c.subId],
     ['UUID', c.uuidMasked || c.uuid],
-    ['Password', c.passwordMasked || c.password],
+    ['رمز عبور', c.passwordMasked || c.password],
     ['Auth', c.authMasked || c.auth],
     ['Flow', c.flow || '-'],
     ['Security', c.security || '-'],
-    ['Limit IP', c.limitIp],
-    ['Traffic Limit', c.totalGB ? formatBytes(c.totalGB) : 'نامحدود / ثبت نشده'],
-    ['Used Traffic', formatBytes(data.usedTraffic)],
-    ['Expiry Time', formatTime(c.expiryTime)],
-    ['Enabled', c.enable ? 'فعال' : 'غیرفعال'],
-    ['Telegram ID', c.tgId || '-'],
-    ['Group', c.group || '-'],
-    ['Comment', c.comment || '-'],
-    ['Reset', c.reset],
-    ['Inbound IDs', (data.inboundIds || []).join(', ') || '-'],
-    ['Secret Path', data.secretPath || '/'],
-    ['Created At', formatTime(c.createdAt)],
-    ['Updated At', formatTime(c.updatedAt)]
+    ['محدودیت IP', c.limitIp],
+    ['سقف ترافیک', c.totalGB ? formatBytes(c.totalGB) : 'نامحدود / ثبت‌نشده'],
+    ['ترافیک مصرف‌شده', formatBytes(data.usedTraffic)],
+    ['تاریخ انقضا', formatTime(c.expiryTime)],
+    ['وضعیت سرویس', c.enable ? 'فعال' : 'غیرفعال'],
+    ['شناسه تلگرام', c.tgId || '-'],
+    ['گروه', c.group || '-'],
+    ['یادداشت', c.comment || '-'],
+    ['وضعیت ریست', c.reset],
+    ['Inboundها', (data.inboundIds || []).join(', ') || '-'],
+    ['مسیر سرویس', data.secretPath || '/'],
+    ['زمان ایجاد', formatTime(c.createdAt)],
+    ['آخرین بروزرسانی', formatTime(c.updatedAt)]
   ];
   $('#details').innerHTML = rows.map(([k, v]) => detailRow(k, v)).join('');
 }
 
 function renderConfigs(links) {
-  $('#configCount').textContent = `${links.length} کانفیگ`;
+  $('#configCount').textContent = `${links.length} کانفیگ فعال`;
   $('#configs').innerHTML = links.map((item) => `
     <article class="config-item">
       <div class="config-meta">
@@ -81,8 +81,8 @@ function renderConfigs(links) {
       </div>
       <code>${item.url}</code>
       <div class="button-row">
-        <button class="small" data-copy-text="${encodeURIComponent(item.url)}">کپی لینک</button>
-        <a class="button small ghost" href="${item.url}">باز کردن</a>
+        <button class="small" data-copy-text="${encodeURIComponent(item.url)}">کپی</button>
+        <a class="button small ghost" href="${item.url}">باز کردن در کلاینت</a>
       </div>
     </article>
   `).join('');
@@ -92,13 +92,13 @@ async function init() {
   try {
     const response = await fetch(withBase(`/api/user/${encodeURIComponent(email)}${keyQuery}`), { cache: 'no-store' });
     const payload = await response.json();
-    if (!response.ok || !payload.success) throw new Error(payload.msg || 'خطا در دریافت اطلاعات');
+    if (!response.ok || !payload.success) throw new Error(payload.msg || 'دریافت اطلاعات سرویس با خطا مواجه شد');
 
     const data = payload.obj;
     $('#statusPill').textContent = data.client.enable ? 'فعال' : 'غیرفعال';
     $('#statusPill').classList.toggle('danger', !data.client.enable);
-    $('#title').textContent = `اشتراک ${data.client.email}`;
-    $('#summary').textContent = `${data.links.length} کانفیگ آماده است. مصرف: ${formatBytes(data.usedTraffic)} از ${data.client.totalGB ? formatBytes(data.client.totalGB) : 'نامحدود'}`;
+    $('#title').textContent = `اشتراک کاربر ${data.client.email}`;
+    $('#summary').textContent = `${data.links.length} کانفیگ فعال یافت شد. مصرف فعلی: ${formatBytes(data.usedTraffic)} از ${data.client.totalGB ? formatBytes(data.client.totalGB) : 'نامحدود'}`;
 
     $('#subscriptionUrl').value = data.subscriptionUrl;
     $('#openSub').href = data.subscriptionUrl;
@@ -122,7 +122,7 @@ async function init() {
   } catch (err) {
     $('#statusPill').textContent = 'خطا';
     $('#statusPill').classList.add('danger');
-    $('#summary').textContent = err.message || 'مشکلی پیش آمد.';
+    $('#summary').textContent = err.message || 'در حال حاضر امکان نمایش اطلاعات وجود ندارد.';
   }
 }
 
