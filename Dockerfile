@@ -1,18 +1,19 @@
-FROM node:20-alpine AS deps
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --omit=dev
+FROM node:20-alpine
 
-FROM node:20-alpine AS runner
 ENV NODE_ENV=production
 WORKDIR /app
 
-COPY --from=deps --chown=node:node /app/node_modules ./node_modules
-COPY --chown=node:node package*.json ./
-COPY --chown=node:node server.js ./
-COPY --chown=node:node public ./public
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev --no-audit --no-fund \
+  && node -e "import('express'); import('helmet'); import('qrcode'); console.log('dependencies ok')" \
+  && npm cache clean --force
 
+COPY server.js ./
+COPY public ./public
+
+RUN chown -R node:node /app
 USER node
+
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \

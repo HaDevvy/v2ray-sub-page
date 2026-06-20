@@ -6,3 +6,4 @@ npm-debug.log
 *.zip
 *.tar.gz
 .DS_Store
+coverage

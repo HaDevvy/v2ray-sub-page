@@ -75,6 +75,29 @@ function mask(value, visible = 6) {
   return `${s.slice(0, visible)}…${s.slice(-visible)}`;
 }
 
+function sanitizeClient(client = {}) {
+  return {
+    id: client.id,
+    email: client.email,
+    flow: client.flow || '',
+    security: client.security || '',
+    limitIp: client.limitIp,
+    totalGB: client.totalGB,
+    expiryTime: client.expiryTime,
+    enable: client.enable,
+    tgId: client.tgId,
+    group: client.group || '',
+    comment: client.comment || '',
+    reset: client.reset,
+    createdAt: client.createdAt,
+    updatedAt: client.updatedAt,
+    uuidMasked: mask(client.uuid),
+    passwordMasked: mask(client.password),
+    authMasked: mask(client.auth),
+    subIdMasked: mask(client.subId)
+  };
+}
+
 function protocolOf(link = '') {
   const match = String(link).match(/^([a-z0-9+.-]+):\/\//i);
   return match ? match[1].toLowerCase() : 'unknown';
@@ -166,13 +189,7 @@ async function loadUser(email) {
   const rawSubscriptionUrl = publicUrl(`/sub/${publicEmail}`, { format: 'raw', key });
 
   return {
-    client: {
-      ...client,
-      uuidMasked: mask(client.uuid),
-      passwordMasked: mask(client.password),
-      authMasked: mask(client.auth),
-      subIdMasked: mask(client.subId)
-    },
+    client: sanitizeClient(client),
     inboundIds: obj.inboundIds || [],
     usedTraffic: obj.usedTraffic || 0,
     links,

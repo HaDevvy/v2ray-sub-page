@@ -1,266 +1,150 @@
 # V2 Sub Page
 
-یک پروژه‌ی سبک برای ساخت صفحه‌ی subscription برای کاربرهای پنل. توکن پنل فقط در بک‌اند نگهداری می‌شود و فرانت‌اند مستقیم به API پنل درخواست نمی‌زند.
+A lightweight V2Ray subscription landing page with backend-only panel API calls.
 
-## امکانات
+## What this app does
 
-- دریافت اطلاعات کاربر از endpoint پنل: `/panel/api/clients/get/{email}`
-- دریافت لینک‌های کانفیگ از endpoint پنل: `/panel/api/clients/subLinks/{subId}`
-- نمایش صفحه‌ی زیبا، سبک، RTL و responsive
-- نمایش لینک‌های کانفیگ و جزئیات کاربر
-- ساخت لینک subscription قابل import در کلاینت‌های رایج
-- خروجی Base64 برای subscription: `/sub/:email`
-- خروجی خام newline-separated: `/sub/:email?format=raw`
-- QR Code برای subscription
-- نگه‌داشتن توکن در `.env`
-- گزینه‌ی `SECRET_PATH` برای قرار دادن کل پروژه پشت مسیر مخفی
-- گزینه‌ی `ACCESS_KEY` برای محدودکردن دسترسی به لینک‌ها
-- آماده برای Docker و Docker Compose
+- Reads the panel token only from environment variables.
+- Calls the panel API only from the backend.
+- Shows a clean user subscription page.
+- Provides a subscription endpoint for apps such as v2rayN, v2rayNG, V2Box, Streisand, and Hiddify.
+- Supports a hidden route prefix with `SECRET_PATH`.
+- Supports an optional `ACCESS_KEY`.
+- Masks sensitive client fields in the browser API response.
 
-## نصب معمولی
+## Important security note
 
-```bash
-npm install
-cp .env.example .env
-nano .env
-npm start
-```
+The panel token is never sent to the browser.
 
-بعد از اجرا:
+The browser can access only this app's backend routes, for example:
 
 ```text
-http://localhost:3000
+/SECRET_PATH/api/user/:email
+/SECRET_PATH/sub/:email
+/SECRET_PATH/qr
 ```
 
-صفحه مستقیم کاربر:
+The backend calls only these panel endpoints:
 
 ```text
-http://localhost:3000/u/USER_EMAIL_OR_ID
+GET {PANEL_BASE_URL}/panel/api/clients/get/{email}
+GET {PANEL_BASE_URL}/panel/api/clients/subLinks/{subId}
 ```
 
-لینک subscription:
+Raw sensitive client fields such as `uuid`, `password`, `auth`, and `subId` are not returned by `/api/user/:email`; only masked versions are returned. The `/sub/:email` endpoint still returns real config links because subscription clients need them.
 
-```text
-http://localhost:3000/sub/USER_EMAIL_OR_ID
-```
+## Environment variables
 
-## تنظیمات `.env`
+Create `.env` next to `docker-compose.yml`:
 
 ```env
 PANEL_BASE_URL=https://host
 PANEL_API_TOKEN=Token
 PUBLIC_BASE_URL=https://sub.example.com
 PORT=3000
-SECRET_PATH=
-ACCESS_KEY=
-```
 
-اگر `PANEL_API_TOKEN` را با `Bearer ` شروع کنی، برنامه همان را استفاده می‌کند. اگر فقط خود توکن را بگذاری، خودش `Bearer` را اضافه می‌کند.
-
-## Secret Path
-
-اگر بخواهی کل پروژه پشت یک مسیر مخفی باشد، مقدار `SECRET_PATH` را تنظیم کن:
-
-```env
+# Optional hidden path prefix. Example: my-secret-path
 SECRET_PATH=my-secret-path
-PUBLIC_BASE_URL=https://sub.example.com
+
+# Optional but strongly recommended.
+ACCESS_KEY=your-long-random-key
 ```
 
-در این حالت آدرس‌ها این‌طوری می‌شوند:
+If `PANEL_API_TOKEN` already includes `Bearer`, the app keeps it. Otherwise it sends it as `Bearer <token>`.
 
-```text
-https://sub.example.com/my-secret-path/
-https://sub.example.com/my-secret-path/u/USER_EMAIL_OR_ID
-https://sub.example.com/my-secret-path/sub/USER_EMAIL_OR_ID
-https://sub.example.com/my-secret-path/sub/USER_EMAIL_OR_ID?format=raw
-```
-
-آدرس‌های بدون secret path، مثل این‌ها، دیگر صفحه اصلی یا API را نشان نمی‌دهند:
-
-```text
-https://sub.example.com/
-https://sub.example.com/u/USER_EMAIL_OR_ID
-https://sub.example.com/sub/USER_EMAIL_OR_ID
-```
-
-نکته: `/healthz` عمومی می‌ماند تا Docker healthcheck و reverse proxy بتوانند سرویس را چک کنند. این endpoint داده‌ی حساسی برنمی‌گرداند.
-
-## Access Key
-
-اگر `ACCESS_KEY` را فعال کنی، آدرس‌ها باید کلید داشته باشند:
-
-```env
-ACCESS_KEY=YOUR_LONG_RANDOM_KEY
-```
-
-نمونه:
-
-```text
-https://sub.example.com/my-secret-path/u/USER?key=YOUR_LONG_RANDOM_KEY
-https://sub.example.com/my-secret-path/sub/USER?key=YOUR_LONG_RANDOM_KEY
-```
-
-همچنین می‌توانی برای درخواست‌های API از header استفاده کنی:
-
-```text
-x-access-key: YOUR_LONG_RANDOM_KEY
-```
-
-پیشنهاد جدی: `SECRET_PATH` امنیت کامل نیست؛ فقط مسیر را غیرقابل‌حدس‌تر می‌کند. برای production بهتر است `ACCESS_KEY` را هم فعال نگه داری.
-
-## اجرای Docker
-
-1. فایل env را بساز:
+## Run with Docker Compose
 
 ```bash
-cp .env.docker.example .env
-nano .env
+docker compose down --rmi local --volumes --remove-orphans
+docker compose build --no-cache --pull
+docker compose up -d
 ```
 
-2. مقدارها را کامل کن:
-
-```env
-PANEL_BASE_URL=https://host
-PANEL_API_TOKEN=Token
-PUBLIC_BASE_URL=https://sub.example.com
-PORT=3000
-SECRET_PATH=my-secret-path
-ACCESS_KEY=یک-کلید-اختیاری-ولی-پیشنهادی
-```
-
-3. اجرا:
+Check logs:
 
 ```bash
-docker compose up -d --build
+docker logs -f v2-sub-page
 ```
 
-4. تست:
+Healthcheck:
 
 ```bash
 curl http://localhost:3000/healthz
 ```
 
-اگر `SECRET_PATH=my-secret-path` باشد، آدرس صفحه:
+Expected response:
+
+```json
+{"ok":true,"service":"v2-sub-page"}
+```
+
+## URLs
+
+If `SECRET_PATH=my-secret-path` and `ACCESS_KEY=your-long-random-key`:
 
 ```text
-http://localhost:3000/my-secret-path/u/EMAIL
+https://sub.example.com/my-secret-path/u/EMAIL?key=your-long-random-key
+https://sub.example.com/my-secret-path/sub/EMAIL?key=your-long-random-key
+https://sub.example.com/my-secret-path/sub/EMAIL?format=raw&key=your-long-random-key
 ```
 
-آدرس subscription:
+If `SECRET_PATH` is set, `/` intentionally returns 404.
+
+## Run locally without Docker
+
+```bash
+npm ci
+PANEL_BASE_URL=https://host \
+PANEL_API_TOKEN=Token \
+PUBLIC_BASE_URL=http://localhost:3000 \
+SECRET_PATH=my-secret-path \
+ACCESS_KEY=your-long-random-key \
+npm start
+```
+
+## Smoke test
+
+This project includes a mock-panel smoke test. It does not call your real panel.
+
+```bash
+npm ci
+npm test
+```
+
+The test validates:
+
+- server startup
+- `/healthz`
+- secret path behavior
+- access key behavior
+- backend panel proxying
+- subscription output
+- QR endpoint
+- no leakage of raw `uuid`, `password`, `auth`, or `subId` from the browser API response
+
+## Docker troubleshooting
+
+If you see an error like:
 
 ```text
-http://localhost:3000/my-secret-path/sub/EMAIL
+Cannot find package '/app/node_modules/express/index.js'
 ```
 
-اگر `ACCESS_KEY` گذاشته‌ای:
+it means the container did not get a valid `node_modules` install. Use the clean rebuild command:
 
-```text
-http://localhost:3000/my-secret-path/u/EMAIL?key=ACCESS_KEY
-http://localhost:3000/my-secret-path/sub/EMAIL?key=ACCESS_KEY
+```bash
+docker compose down --rmi local --volumes --remove-orphans
+docker compose build --no-cache --pull
+docker compose up -d
 ```
 
-## Dockerfile
-
-```dockerfile
-FROM node:20-alpine AS deps
-
-WORKDIR /app
-
-COPY package*.json ./
-RUN npm ci --omit=dev
-
-FROM node:20-alpine AS runner
-
-ENV NODE_ENV=production
-WORKDIR /app
-
-COPY --from=deps /app/node_modules ./node_modules
-COPY package*.json ./
-COPY server.js ./
-COPY public ./public
-
-USER node
-
-EXPOSE 3000
-
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
-
-CMD ["node", "server.js"]
-```
-
-## docker-compose.yml
+Also make sure your compose file does not mount the project over `/app` like this:
 
 ```yaml
-services:
-  v2-sub-page:
-    build: .
-    container_name: v2-sub-page
-    restart: unless-stopped
-    env_file:
-      - .env
-    ports:
-      - "3000:3000"
+volumes:
+  - .:/app
 ```
 
-## پشت Nginx یا Caddy
+That kind of bind mount can hide the `node_modules` installed during image build and cause the exact `express/index.js` error.
 
-برای production بهتر است container فقط روی سرور داخلی اجرا شود و دامنه HTTPS را با reverse proxy به آن وصل کنی. در این حالت `PUBLIC_BASE_URL` باید همان دامنه نهایی باشد، مثلاً:
-
-```env
-PUBLIC_BASE_URL=https://sub.example.com
-SECRET_PATH=my-secret-path
-```
-
-نمونه Nginx:
-
-```nginx
-server {
-  server_name sub.example.com;
-
-  location / {
-    proxy_pass http://127.0.0.1:3000;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-  }
-}
-```
-
-## دیپلوی سریع با PM2
-
-```bash
-npm i -g pm2
-pm2 start server.js --name v2-sub-page
-pm2 save
-```
-
-## نکات امنیتی
-
-- این پروژه توکن پنل را در مرورگر ارسال نمی‌کند.
-- بهتر است پروژه پشت HTTPS اجرا شود.
-- برای جلوگیری از حدس‌زدن ایمیل/شناسه کاربران، `ACCESS_KEY` را فعال کن.
-- `SECRET_PATH` را عمومی منتشر نکن.
-- در UI، مقدارهای حساس مثل UUID، password، auth و subId به صورت mask شده نمایش داده می‌شوند.
-- اگر می‌خواهی مقدارهای حساس کامل نمایش داده شوند، تابع `mask` و `renderDetails` را تغییر بده.
-
-## لینک کلاینت‌ها
-
-- v2rayN: https://github.com/2dust/v2rayN/releases
-- v2rayNG: https://github.com/2dust/v2rayNG/releases
-- V2Box Android: https://play.google.com/store/apps/details?id=dev.hexasoftware.v2box
-- V2Box iOS/macOS: https://apps.apple.com/us/app/v2box-v2ray-client/id6446814690
-- Streisand iOS: https://apps.apple.com/us/app/streisand/id6450534064
-- Hiddify: https://github.com/hiddify/hiddify-app/releases
-- V2Ray Core: https://github.com/v2fly/v2ray-core/releases
-
-
-### Fix note: no dotenv dependency in Docker
-
-This project does not import `dotenv` at runtime. In Docker, variables are injected by `docker-compose.yml` through `env_file: .env`. If you run without Docker, export environment variables yourself or use Node's `--env-file` support:
-
-```bash
-node --env-file=.env server.js
-```
-
+This project's `docker-compose.yml` intentionally has no `volumes` section.
