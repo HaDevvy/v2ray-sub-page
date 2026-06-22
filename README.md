@@ -12,6 +12,7 @@
 - خروجی Base64 برای subscription: `/sub/:email`
 - خروجی خام newline-separated: `/sub/:email?format=raw`
 - QR Code برای subscription
+- اضافه‌کردن خودکار پارامتر `ech` به کانفیگ‌های `vless://` از فایل `last_ech.txt`
 - نگه‌داشتن توکن در `.env`
 - گزینه‌ی `SECRET_PATH` برای قرار دادن کل پروژه پشت مسیر مخفی
 - گزینه‌ی `ACCESS_KEY` برای محدودکردن دسترسی به لینک‌ها
@@ -53,9 +54,27 @@ PUBLIC_BASE_URL=https://sub.example.com
 PORT=3000
 SECRET_PATH=
 ACCESS_KEY=
+ECH_FILE_PATH=./last_ech.txt
 ```
 
 اگر `PANEL_API_TOKEN` را با `Bearer ` شروع کنی، برنامه همان را استفاده می‌کند. اگر فقط خود توکن را بگذاری، خودش `Bearer` را اضافه می‌کند.
+
+
+## ECH برای VLESS
+
+برنامه قبل از ساخت خروجی، مقدار ECH را از فایل `last_ech.txt` می‌خواند و به همه‌ی لینک‌های `vless://` به صورت پارامتر `ech` اضافه می‌کند. مقدار داخل فایل باید خام باشد، مثلا:
+
+```text
+AEX+DQBBnQAgACAuUyG3EwlOlnDr5/s2GM04Ruokm4DKWz+ouys2fCitRwAEAAEAAQASY2xvdWRmbGFyZS1lY2guY29tAAA=
+```
+
+در خروجی لینک، این مقدار خودکار URL-encode می‌شود؛ یعنی `+` به `%2B`، `/` به `%2F` و `=` به `%3D` تبدیل می‌شود. اگر فایل تغییر کند، نیاز به restart نیست؛ برنامه در هر درخواست `/api/user/:email` و `/sub/:email` دوباره فایل را می‌خواند.
+
+مسیر پیش‌فرض فایل کنار `server.js` است، ولی می‌توانی در `.env` مسیر دیگری بدهی:
+
+```env
+ECH_FILE_PATH=/path/to/last_ech.txt
+```
 
 ## Secret Path
 
@@ -126,6 +145,7 @@ PUBLIC_BASE_URL=https://sub.example.com
 PORT=3000
 SECRET_PATH=my-secret-path
 ACCESS_KEY=یک-کلید-اختیاری-ولی-پیشنهادی
+ECH_FILE_PATH=./last_ech.txt
 ```
 
 3. اجرا:
@@ -177,6 +197,7 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY package*.json ./
 COPY server.js ./
+COPY last_ech.txt ./last_ech.txt
 COPY public ./public
 
 USER node
@@ -201,6 +222,8 @@ services:
       - .env
     ports:
       - "3000:3000"
+    volumes:
+      - ./last_ech.txt:/app/last_ech.txt:ro
 ```
 
 ## پشت Nginx یا Caddy

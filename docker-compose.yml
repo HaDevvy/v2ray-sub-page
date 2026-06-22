@@ -8,4 +8,6 @@ services:
     env_file:
       - .env
     ports:
-      - "3000:3000"
+      - "3000"
+    volumes:
+      - /root/dev/Market/last_ech.txt:/app/last_ech.txt:ro

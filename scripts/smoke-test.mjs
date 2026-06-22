@@ -1,5 +1,8 @@
 import http from 'node:http';
 import { spawn } from 'node:child_process';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 
 const client = {
   id: 2,
@@ -78,7 +81,7 @@ const panel = http.createServer((req, res) => {
       msg: '',
       obj: [
         'vmess://mock-config-one#Demo%20VMess',
-        'vless://mock-config-two#Demo%20VLESS'
+        'vless://mock-config-two@example.com:443?encryption=none&allowInsecure=0&type=ws#Demo%20VLESS'
       ]
     }));
     return;
@@ -87,6 +90,9 @@ const panel = http.createServer((req, res) => {
   res.writeHead(404, { 'content-type': 'application/json' });
   res.end(JSON.stringify({ success: false, msg: 'not found' }));
 });
+
+const echFilePath = path.join(await fs.mkdtemp(path.join(os.tmpdir(), 'v2-sub-page-ech-')), 'last_ech.txt');
+await fs.writeFile(echFilePath, 'A+B/C=\n');
 
 const panelPort = await listen(panel);
 const appPortServer = http.createServer();
@@ -102,7 +108,8 @@ const child = spawn(process.execPath, ['server.js'], {
     PANEL_API_TOKEN: 'test-token',
     PUBLIC_BASE_URL: `http://127.0.0.1:${appPort}`,
     SECRET_PATH: 'secret-test',
-    ACCESS_KEY: 'test-key'
+    ACCESS_KEY: 'test-key',
+    ECH_FILE_PATH: echFilePath
   },
   stdio: ['ignore', 'pipe', 'pipe']
 });
@@ -130,6 +137,10 @@ try {
   if (api.status !== 200) throw new Error(`api failed: ${api.status} ${api.text}`);
   const apiJson = JSON.parse(api.text);
   if (!apiJson.success || apiJson.obj.links.length !== 2) throw new Error('api payload is invalid');
+  const vlessFromApi = apiJson.obj.links.find((item) => item.protocol === 'VLESS')?.url || '';
+  if (!vlessFromApi.includes('allowInsecure=0&ech=A%2BB%2FC%3D&type=ws')) {
+    throw new Error(`VLESS ECH was not injected in API response: ${vlessFromApi}`);
+  }
 
   const serializedClient = JSON.stringify(apiJson.obj.client);
   for (const secret of [client.uuid, client.password, client.auth, client.subId]) {
@@ -144,14 +155,22 @@ try {
   if (!decoded.includes('vmess://mock-config-one') || !decoded.includes('vless://mock-config-two')) {
     throw new Error('subscription body is invalid');
   }
+  if (!decoded.includes('ech=A%2BB%2FC%3D')) {
+    throw new Error(`subscription body does not include encoded ECH: ${decoded}`);
+  }
+
+  await fs.writeFile(echFilePath, 'NEW+ECH=\n');
 
   const raw = await request(`${base}/secret-test/sub/demo-user?format=raw&key=test-key`);
   if (raw.status !== 200 || !raw.text.includes('\n')) throw new Error('raw subscription failed');
+  if (!raw.text.includes('ech=NEW%2BECH%3D')) {
+    throw new Error(`raw subscription did not use updated ECH file: ${raw.text}`);
+  }
 
   const qr = await request(`${base}/secret-test/qr?text=${encodeURIComponent('hello')}&key=test-key`);
   if (qr.status !== 200 || !qr.text.includes('<svg')) throw new Error('qr failed');
 
-  console.log('Smoke test passed. Routes, secret path, access key, panel proxy, subscription, QR, and sensitive-field masking are OK.');
+  console.log('Smoke test passed. Routes, secret path, access key, panel proxy, subscription, QR, ECH injection, and sensitive-field masking are OK.');
 } finally {
   child.kill('SIGTERM');
   panel.close();

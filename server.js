@@ -1,5 +1,6 @@
 import express from 'express';
 import helmet from 'helmet';
+import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import QRCode from 'qrcode';
@@ -13,6 +14,9 @@ const PANEL_BASE_URL = (process.env.PANEL_BASE_URL || '').replace(/\/+$/, '');
 const PANEL_API_TOKEN = process.env.PANEL_API_TOKEN || '';
 const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || `http://localhost:${PORT}`).replace(/\/+$/, '');
 const ACCESS_KEY = process.env.ACCESS_KEY || '';
+const ECH_FILE_PATH = process.env.ECH_FILE_PATH
+  ? path.resolve(__dirname, process.env.ECH_FILE_PATH)
+  : path.join(__dirname, 'last_ech.txt');
 
 function normalizeSecretPath(value) {
   if (!value) return '';
@@ -98,6 +102,55 @@ function sanitizeClient(client = {}) {
   };
 }
 
+async function readLatestEch() {
+  try {
+    const content = await fs.readFile(ECH_FILE_PATH, 'utf8');
+    return content
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .find((line) => line && !line.startsWith('#')) || '';
+  } catch (err) {
+    if (err?.code !== 'ENOENT') {
+      console.warn(`[ech] Cannot read ${ECH_FILE_PATH}: ${err.message}`);
+    }
+    return '';
+  }
+}
+
+function setQueryParamPreservingOrder(query, key, value, insertAfterKeys = []) {
+  const params = new URLSearchParams(query || '');
+  params.delete(key);
+
+  const entries = Array.from(params.entries());
+  const insertAfterIndex = entries.reduce((lastMatch, [entryKey], index) => (
+    insertAfterKeys.includes(entryKey) ? index : lastMatch
+  ), -1);
+
+  const nextEntries = [...entries];
+  nextEntries.splice(insertAfterIndex + 1, 0, [key, value]);
+
+  const nextParams = new URLSearchParams();
+  nextEntries.forEach(([entryKey, entryValue]) => nextParams.append(entryKey, entryValue));
+  return nextParams.toString();
+}
+
+function addEchToVlessLink(link, echValue) {
+  const rawLink = String(link || '');
+  const ech = String(echValue || '').trim();
+  if (!ech || protocolOf(rawLink) !== 'vless') return rawLink;
+
+  const hashIndex = rawLink.indexOf('#');
+  const beforeHash = hashIndex >= 0 ? rawLink.slice(0, hashIndex) : rawLink;
+  const hash = hashIndex >= 0 ? rawLink.slice(hashIndex) : '';
+
+  const queryIndex = beforeHash.indexOf('?');
+  const base = queryIndex >= 0 ? beforeHash.slice(0, queryIndex) : beforeHash;
+  const query = queryIndex >= 0 ? beforeHash.slice(queryIndex + 1) : '';
+
+  const nextQuery = setQueryParamPreservingOrder(query, 'ech', ech, ['allowInsecure', 'insecure']);
+  return `${base}${nextQuery ? `?${nextQuery}` : ''}${hash}`;
+}
+
 function protocolOf(link = '') {
   const match = String(link).match(/^([a-z0-9+.-]+):\/\//i);
   return match ? match[1].toLowerCase() : 'unknown';
@@ -175,13 +228,17 @@ async function loadUser(email) {
   }
 
   const subPayload = await panelGet(`/panel/api/clients/subLinks/${encodeURIComponent(client.subId)}`);
+  const latestEch = await readLatestEch();
   const rawLinks = Array.isArray(subPayload?.obj) ? subPayload.obj.filter(Boolean) : [];
-  const links = rawLinks.map((url, index) => ({
-    index: index + 1,
-    name: nameOf(url, index),
-    protocol: protocolLabels[protocolOf(url)] || protocolOf(url).toUpperCase(),
-    url
-  }));
+  const links = rawLinks.map((rawUrl, index) => {
+    const url = addEchToVlessLink(rawUrl, latestEch);
+    return {
+      index: index + 1,
+      name: nameOf(url, index),
+      protocol: protocolLabels[protocolOf(url)] || protocolOf(url).toUpperCase(),
+      url
+    };
+  });
 
   const publicEmail = encodeURIComponent(email);
   const key = ACCESS_KEY || undefined;
