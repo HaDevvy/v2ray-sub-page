@@ -10,4 +10,4 @@ services:
     ports:
       - "3000"
     volumes:
-      - /root/dev/Market/last_ech.txt:/app/last_ech.txt:ro
+      - /root/dev/Market/ech-updater-data:/app/ech-updater-data:ro

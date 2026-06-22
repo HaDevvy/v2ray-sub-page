@@ -16,7 +16,7 @@ const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || `http://localhost:${PORT
 const ACCESS_KEY = process.env.ACCESS_KEY || '';
 const ECH_FILE_PATH = process.env.ECH_FILE_PATH
   ? path.resolve(__dirname, process.env.ECH_FILE_PATH)
-  : path.join(__dirname, 'last_ech.txt');
+  : path.join(__dirname, 'ech-updater-data', 'last_ech.txt');
 
 function normalizeSecretPath(value) {
   if (!value) return '';

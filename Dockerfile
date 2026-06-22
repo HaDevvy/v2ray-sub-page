@@ -17,7 +17,7 @@ RUN npm install --omit=dev --no-package-lock --no-audit --no-fund \
   && npm cache clean --force
 
 COPY server.js ./
-COPY last_ech.txt ./last_ech.txt
+COPY ech-updater-data ./ech-updater-data
 COPY public ./public
 
 RUN chown -R node:node /app
