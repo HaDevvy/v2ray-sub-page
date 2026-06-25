@@ -241,3 +241,24 @@ button, .button {
   .section-head, .config-meta, .detail-row { align-items: flex-start; flex-direction: column; }
   h1 { font-size: 34px; }
 }
+
+.helper-link { margin-top: 16px; }
+.topbar-links { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+textarea {
+  width: 100%;
+  min-height: 260px;
+  resize: vertical;
+  border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--text);
+  padding: 14px 16px;
+  border-radius: 16px;
+  outline: none;
+  direction: ltr;
+  text-align: left;
+  line-height: 1.8;
+  font: 14px/1.8 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+textarea:focus { border-color: rgba(131, 247, 207, 0.7); }
+.hosts-hero { margin-bottom: 18px; }
+.hosts-grid code { min-height: 260px; }

@@ -8,6 +8,8 @@ const key = params.get('key');
 const keyQuery = key ? `?key=${encodeURIComponent(key)}` : '';
 
 const withBase = (pathname) => `${appBasePath}${pathname.startsWith('/') ? pathname : `/${pathname}`}`;
+const hostsPageLink = document.querySelector('#hostsPageLink');
+if (hostsPageLink) hostsPageLink.href = `${withBase('/hosts')}${keyQuery}`;
 
 const formatBytes = (bytes = 0) => {
   const value = Number(bytes || 0);

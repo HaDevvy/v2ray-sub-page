@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>مدیریت هاست‌های کانفیگ</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <a id="homeLink" class="brand" href="./">Subscription Panel</a>
+      <span id="statusPill" class="status-pill">در حال خواندن فایل</span>
+    </header>
+
+    <section class="card hero compact hosts-hero">
+      <div>
+        <div class="badge">Host Overrides</div>
+        <h1>مدیریت هاست‌های اضافه</h1>
+        <p>هر host را در یک خط بنویسید. هنگام ساخت خروجی اشتراک، کانفیگ اصلی حفظ می‌شود و برای هر host این فایل، یک کانفیگ VLESS جدید با همان پورت و پارامترها ساخته می‌شود.</p>
+      </div>
+    </section>
+
+    <section class="grid two hosts-grid">
+      <form id="hostsForm" class="card action-card">
+        <div class="section-head">
+          <h2>ویرایش فایل hosts.txt</h2>
+          <span id="hostCount" class="muted">۰ هاست</span>
+        </div>
+        <label for="hostsText" class="muted">هر خط فقط یک host، مثل: host1.example.com</label>
+        <textarea id="hostsText" spellcheck="false" placeholder="host1.example.com&#10;host2.example.com&#10;host3.example.com"></textarea>
+        <div class="button-row">
+          <button type="submit">ذخیره در فایل txt</button>
+          <button id="reloadHosts" class="small ghost" type="button">بارگذاری دوباره</button>
+        </div>
+        <p class="muted">خط‌های خالی، خط‌هایی که با # شروع شوند، آدرس‌های دارای http/https و مقدارهای دارای فاصله، پورت، /، ? یا @ ذخیره نمی‌شوند.</p>
+      </form>
+
+      <section class="card action-card">
+        <h2>محتوای فعلی فایل</h2>
+        <p>این همان محتوایی است که سرور از فایل txt می‌خواند و برای ساخت کانفیگ‌های اضافه استفاده می‌کند.</p>
+        <code id="hostsPreview">در حال دریافت...</code>
+      </section>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" role="status"></div>
+  <script src="./hosts-env.js"></script>
+  <script src="./hosts.js"></script>
+</body>
+</html>

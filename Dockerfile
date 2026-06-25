@@ -20,7 +20,8 @@ COPY server.js ./
 COPY ech-updater-data ./ech-updater-data
 COPY public ./public
 
-RUN chown -R node:node /app
+RUN mkdir -p /app/data \
+  && chown -R node:node /app
 USER node
 
 EXPOSE 3000

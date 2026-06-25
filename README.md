@@ -13,6 +13,7 @@
 - خروجی خام newline-separated: `/sub/:email?format=raw`
 - QR Code برای subscription
 - اضافه‌کردن خودکار پارامتر `ech` به کانفیگ‌های `vless://` از فایل `ech-updater-data/last_ech.txt`
+- مدیریت هاست‌های جایگزین از صفحه‌ی `/hosts`، ذخیره در فایل txt، و امکان تغییر مسیر API مدیریت هاست‌ها
 - نگه‌داشتن توکن در `.env`
 - گزینه‌ی `SECRET_PATH` برای قرار دادن کل پروژه پشت مسیر مخفی
 - گزینه‌ی `ACCESS_KEY` برای محدودکردن دسترسی به لینک‌ها
@@ -55,6 +56,8 @@ PORT=3000
 SECRET_PATH=
 ACCESS_KEY=
 ECH_FILE_PATH=./ech-updater-data/last_ech.txt
+HOSTS_FILE_PATH=./data/hosts.txt
+HOSTS_API_PATH=/api/hosts
 ```
 
 اگر `PANEL_API_TOKEN` را با `Bearer ` شروع کنی، برنامه همان را استفاده می‌کند. اگر فقط خود توکن را بگذاری، خودش `Bearer` را اضافه می‌کند.
@@ -91,6 +94,71 @@ EOF
 ```env
 ECH_FILE_PATH=/path/to/ech-updater-data/last_ech.txt
 ```
+
+
+## مدیریت هاست‌های اضافه
+
+یک صفحه‌ی جدید برای مدیریت hostها اضافه شده است:
+
+```text
+http://localhost:3000/hosts
+```
+
+اگر `SECRET_PATH` فعال باشد:
+
+```text
+http://localhost:3000/my-secret-path/hosts
+```
+
+اگر `ACCESS_KEY` فعال باشد، کلید را هم به آدرس اضافه کن:
+
+```text
+http://localhost:3000/my-secret-path/hosts?key=ACCESS_KEY
+```
+
+در این صفحه می‌توانی هر host را در یک خط بنویسی و ذخیره کنی. محتوا در فایل txt ذخیره می‌شود. مسیر پیش‌فرض فایل:
+
+```env
+HOSTS_FILE_PATH=./data/hosts.txt
+```
+
+مسیر API خواندن/نوشتن همین فایل به صورت پیش‌فرض `/api/hosts` است. اگر نمی‌خواهی این API با مسیر عمومی `/api/hosts` در دسترس باشد، در `.env` یک مسیر اختصاصی بده:
+
+```env
+HOSTS_API_PATH=private-hosts-api
+```
+
+بعد از آن API این‌طوری می‌شود:
+
+```text
+http://localhost:3000/private-hosts-api
+```
+
+و اگر `SECRET_PATH` هم فعال باشد، مسیر کامل زیر استفاده می‌شود:
+
+```text
+http://localhost:3000/my-secret-path/private-hosts-api
+```
+
+صفحه‌ی `/hosts` خودش مسیر جدید را از سرور می‌خواند، پس لازم نیست داخل `public/hosts.js` چیزی را دستی عوض کنی.
+
+نمونه‌ی فایل:
+
+```text
+host1.example.com
+host2.example.com
+host3.example.com
+```
+
+برای هر کانفیگ `vless://`، خروجی اشتراک اول کانفیگ اصلی را نگه می‌دارد و بعد به تعداد hostهای داخل فایل، کانفیگ اضافه می‌سازد. فقط بخش host در این قسمت تغییر می‌کند:
+
+```text
+vless://uuid@HOST:port?...
+```
+
+پورت، query، `ech`، `sni`، `path` و بقیه‌ی پارامترها همان مقدار کانفیگ اصلی باقی می‌مانند.
+
+برای Docker، مسیر `/app/data` در `docker-compose.yml` به یک volume وصل شده تا فایل hosts بعد از rebuild از بین نرود. اگر `HOSTS_API_PATH` را عوض می‌کنی، مقدار آن را داخل فایل `.env` مربوط به Docker هم بگذار.
 
 ## Secret Path
 
@@ -162,6 +230,8 @@ PORT=3000
 SECRET_PATH=my-secret-path
 ACCESS_KEY=یک-کلید-اختیاری-ولی-پیشنهادی
 ECH_FILE_PATH=./ech-updater-data/last_ech.txt
+HOSTS_FILE_PATH=./data/hosts.txt
+HOSTS_API_PATH=/api/hosts
 ```
 
 3. اجرا:

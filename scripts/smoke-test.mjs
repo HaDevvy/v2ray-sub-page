@@ -91,8 +91,11 @@ const panel = http.createServer((req, res) => {
   res.end(JSON.stringify({ success: false, msg: 'not found' }));
 });
 
-const echFilePath = path.join(await fs.mkdtemp(path.join(os.tmpdir(), 'v2-sub-page-ech-')), 'last_ech.txt');
+const testDataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'v2-sub-page-data-'));
+const echFilePath = path.join(testDataDir, 'last_ech.txt');
+const hostsFilePath = path.join(testDataDir, 'hosts.txt');
 await fs.writeFile(echFilePath, 'A+B/C=\n');
+await fs.writeFile(hostsFilePath, 'alt1.example.com\nalt2.example.com\n');
 
 const panelPort = await listen(panel);
 const appPortServer = http.createServer();
@@ -109,7 +112,9 @@ const child = spawn(process.execPath, ['server.js'], {
     PUBLIC_BASE_URL: `http://127.0.0.1:${appPort}`,
     SECRET_PATH: 'secret-test',
     ACCESS_KEY: 'test-key',
-    ECH_FILE_PATH: echFilePath
+    ECH_FILE_PATH: echFilePath,
+    HOSTS_FILE_PATH: hostsFilePath,
+    HOSTS_API_PATH: 'private-hosts-api'
   },
   stdio: ['ignore', 'pipe', 'pipe']
 });
@@ -133,13 +138,39 @@ try {
     throw new Error(`user page failed: ${page.status}`);
   }
 
+  const hostsPage = await request(`${base}/secret-test/hosts?key=test-key`);
+  if (hostsPage.status !== 200 || !hostsPage.text.includes('مدیریت هاست‌های اضافه')) {
+    throw new Error(`hosts page failed: ${hostsPage.status}`);
+  }
+
+  const hostsEnv = await request(`${base}/secret-test/hosts-env.js`);
+  if (hostsEnv.status !== 200 || !hostsEnv.text.includes('/private-hosts-api')) {
+    throw new Error(`hosts env js failed: ${hostsEnv.status} ${hostsEnv.text}`);
+  }
+
+  const oldHostsApi = await request(`${base}/secret-test/api/hosts?key=test-key`);
+  if (oldHostsApi.status !== 404) {
+    throw new Error(`default hosts api should be hidden when HOSTS_API_PATH is custom, got ${oldHostsApi.status}`);
+  }
+
+  const hostsApi = await request(`${base}/secret-test/private-hosts-api?key=test-key`);
+  if (hostsApi.status !== 200) throw new Error(`hosts api failed: ${hostsApi.status} ${hostsApi.text}`);
+  const hostsJson = JSON.parse(hostsApi.text);
+  if (!hostsJson.success || hostsJson.obj.hosts.length !== 2 || !hostsJson.obj.text.includes('alt1.example.com')) {
+    throw new Error(`hosts api payload is invalid: ${hostsApi.text}`);
+  }
+
   const api = await request(`${base}/secret-test/api/user/demo-user?key=test-key`);
   if (api.status !== 200) throw new Error(`api failed: ${api.status} ${api.text}`);
   const apiJson = JSON.parse(api.text);
-  if (!apiJson.success || apiJson.obj.links.length !== 2) throw new Error('api payload is invalid');
+  if (!apiJson.success || apiJson.obj.links.length !== 4) throw new Error('api payload is invalid');
   const vlessFromApi = apiJson.obj.links.find((item) => item.protocol === 'VLESS')?.url || '';
   if (!vlessFromApi.includes('allowInsecure=0&ech=A%2BB%2FC%3D&type=ws')) {
     throw new Error(`VLESS ECH was not injected in API response: ${vlessFromApi}`);
+  }
+  const expandedHosts = apiJson.obj.links.map((item) => item.url).join('\n');
+  if (!expandedHosts.includes('vless://mock-config-two@alt1.example.com:443') || !expandedHosts.includes('vless://mock-config-two@alt2.example.com:443')) {
+    throw new Error(`VLESS host expansion failed: ${expandedHosts}`);
   }
 
   const serializedClient = JSON.stringify(apiJson.obj.client);
@@ -155,22 +186,33 @@ try {
   if (!decoded.includes('vmess://mock-config-one') || !decoded.includes('vless://mock-config-two')) {
     throw new Error('subscription body is invalid');
   }
-  if (!decoded.includes('ech=A%2BB%2FC%3D')) {
-    throw new Error(`subscription body does not include encoded ECH: ${decoded}`);
+  if (!decoded.includes('ech=A%2BB%2FC%3D') || !decoded.includes('@alt1.example.com:443')) {
+    throw new Error(`subscription body does not include encoded ECH and expanded hosts: ${decoded}`);
   }
 
   await fs.writeFile(echFilePath, 'NEW+ECH=\n');
 
+  const saveHosts = await request(`${base}/secret-test/private-hosts-api?key=test-key`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ text: 'new-host.example.com\n# ignored\nhttps://ignored.example.com\nnew-host.example.com\n' })
+  });
+  if (saveHosts.status !== 200) throw new Error(`hosts save failed: ${saveHosts.status} ${saveHosts.text}`);
+  const savedHostsJson = JSON.parse(saveHosts.text);
+  if (savedHostsJson.obj.hosts.length !== 1 || savedHostsJson.obj.hosts[0] !== 'new-host.example.com') {
+    throw new Error(`hosts save did not normalize content: ${saveHosts.text}`);
+  }
+
   const raw = await request(`${base}/secret-test/sub/demo-user?format=raw&key=test-key`);
   if (raw.status !== 200 || !raw.text.includes('\n')) throw new Error('raw subscription failed');
-  if (!raw.text.includes('ech=NEW%2BECH%3D')) {
-    throw new Error(`raw subscription did not use updated ECH file: ${raw.text}`);
+  if (!raw.text.includes('ech=NEW%2BECH%3D') || !raw.text.includes('@new-host.example.com:443')) {
+    throw new Error(`raw subscription did not use updated ECH/hosts files: ${raw.text}`);
   }
 
   const qr = await request(`${base}/secret-test/qr?text=${encodeURIComponent('hello')}&key=test-key`);
   if (qr.status !== 200 || !qr.text.includes('<svg')) throw new Error('qr failed');
 
-  console.log('Smoke test passed. Routes, secret path, access key, panel proxy, subscription, QR, ECH injection, and sensitive-field masking are OK.');
+  console.log('Smoke test passed. Routes, secret path, custom hosts API path, access key, panel proxy, host editor, subscription expansion, QR, ECH injection, and sensitive-field masking are OK.');
 } finally {
   child.kill('SIGTERM');
   panel.close();

@@ -19,6 +19,7 @@
           <button type="submit">مشاهده اشتراک</button>
         </div>
       </form>
+      <p class="helper-link"><a id="hostsPageLink" class="button ghost" href="./hosts">مدیریت هاست‌های اضافه</a></p>
     </section>
   </main>
   <script>
@@ -26,6 +27,11 @@
       const path = location.pathname.replace(/\/+$/, '');
       return path === '/' ? '' : path;
     }
+
+    const hostsPageLink = document.querySelector('#hostsPageLink');
+    const initialParams = new URLSearchParams(location.search);
+    const initialKey = initialParams.get('key');
+    hostsPageLink.href = `${currentBasePath()}/hosts${initialKey ? `?key=${encodeURIComponent(initialKey)}` : ''}`;
 
     document.querySelector('#lookupForm').addEventListener('submit', (event) => {
       event.preventDefault();

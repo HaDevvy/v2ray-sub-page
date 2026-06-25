@@ -17,6 +17,24 @@ const ACCESS_KEY = process.env.ACCESS_KEY || '';
 const ECH_FILE_PATH = process.env.ECH_FILE_PATH
   ? path.resolve(__dirname, process.env.ECH_FILE_PATH)
   : path.join(__dirname, 'ech-updater-data', 'last_ech.txt');
+const HOSTS_FILE_PATH = process.env.HOSTS_FILE_PATH
+  ? path.resolve(__dirname, process.env.HOSTS_FILE_PATH)
+  : path.join(__dirname, 'data', 'hosts.txt');
+const HOSTS_API_PATH = normalizeRoutePath(process.env.HOSTS_API_PATH, '/api/hosts');
+
+function normalizeRoutePath(value, fallback) {
+  if (!value) return fallback;
+  const clean = String(value).trim().replace(/^\/+/, '').replace(/\/+$/, '');
+  if (!clean) return fallback;
+
+  const routePath = `/${clean}`;
+  if (!/^\/[A-Za-z0-9/_-]+$/.test(routePath)) {
+    console.warn(`[config] HOSTS_API_PATH=${JSON.stringify(value)} is invalid. Falling back to ${fallback}`);
+    return fallback;
+  }
+
+  return routePath;
+}
 
 function normalizeSecretPath(value) {
   if (!value) return '';
@@ -48,6 +66,7 @@ app.use(
     }
   })
 );
+app.use(express.json({ limit: '64kb' }));
 
 const protocolLabels = {
   vmess: 'VMess',
@@ -117,6 +136,57 @@ async function readLatestEch() {
   }
 }
 
+function normalizeHostsText(text = '') {
+  const seen = new Set();
+  const hosts = [];
+
+  String(text)
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .forEach((line) => {
+      if (!line || line.startsWith('#')) return;
+      if (/^https?:\/\//i.test(line) || /[\s/:?#@]/.test(line)) return;
+      const key = line.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      hosts.push(line);
+    });
+
+  return hosts.join('\n');
+}
+
+function hostsFromText(text = '') {
+  const normalized = normalizeHostsText(text);
+  return normalized ? normalized.split('\n') : [];
+}
+
+async function ensureWritableFileParent(filePath) {
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+}
+
+async function readHostsText() {
+  try {
+    return normalizeHostsText(await fs.readFile(HOSTS_FILE_PATH, 'utf8'));
+  } catch (err) {
+    if (err?.code !== 'ENOENT') {
+      console.warn(`[hosts] Cannot read ${HOSTS_FILE_PATH}: ${err.message}`);
+    }
+    return '';
+  }
+}
+
+async function readCustomHosts() {
+  return hostsFromText(await readHostsText());
+}
+
+async function writeHostsText(text) {
+  const normalized = normalizeHostsText(text);
+  await ensureWritableFileParent(HOSTS_FILE_PATH);
+  await fs.writeFile(HOSTS_FILE_PATH, normalized ? `${normalized}\n` : '', 'utf8');
+  return normalized;
+}
+
+
 function setQueryParamPreservingOrder(query, key, value, insertAfterKeys = []) {
   const params = new URLSearchParams(query || '');
   params.delete(key);
@@ -150,6 +220,38 @@ function addEchToVlessLink(link, echValue) {
   const nextQuery = setQueryParamPreservingOrder(query, 'ech', ech, ['allowInsecure', 'insecure']);
   return `${base}${nextQuery ? `?${nextQuery}` : ''}${hash}`;
 }
+
+function replaceVlessAuthorityHost(link, host) {
+  const rawLink = String(link || '');
+  const nextHost = String(host || '').trim();
+  if (!nextHost || protocolOf(rawLink) !== 'vless') return rawLink;
+
+  const hashIndex = rawLink.indexOf('#');
+  const beforeHash = hashIndex >= 0 ? rawLink.slice(0, hashIndex) : rawLink;
+  const hash = hashIndex >= 0 ? rawLink.slice(hashIndex) : '';
+
+  const queryIndex = beforeHash.indexOf('?');
+  const beforeQuery = queryIndex >= 0 ? beforeHash.slice(0, queryIndex) : beforeHash;
+  const query = queryIndex >= 0 ? beforeHash.slice(queryIndex) : '';
+
+  const atIndex = beforeQuery.lastIndexOf('@');
+  if (atIndex < 0) return rawLink;
+
+  const authorityAfterAt = beforeQuery.slice(atIndex + 1);
+  const portSeparatorIndex = authorityAfterAt.lastIndexOf(':');
+  if (portSeparatorIndex <= 0) return rawLink;
+
+  const prefix = beforeQuery.slice(0, atIndex + 1);
+  const portPart = authorityAfterAt.slice(portSeparatorIndex);
+  return `${prefix}${nextHost}${portPart}${query}${hash}`;
+}
+
+function expandVlessLinkByHosts(link, hosts = []) {
+  const rawLink = String(link || '');
+  if (protocolOf(rawLink) !== 'vless') return [rawLink];
+  return [rawLink, ...hosts.map((host) => replaceVlessAuthorityHost(rawLink, host))];
+}
+
 
 function protocolOf(link = '') {
   const match = String(link).match(/^([a-z0-9+.-]+):\/\//i);
@@ -229,16 +331,18 @@ async function loadUser(email) {
 
   const subPayload = await panelGet(`/panel/api/clients/subLinks/${encodeURIComponent(client.subId)}`);
   const latestEch = await readLatestEch();
+  const customHosts = await readCustomHosts();
   const rawLinks = Array.isArray(subPayload?.obj) ? subPayload.obj.filter(Boolean) : [];
-  const links = rawLinks.map((rawUrl, index) => {
+  const expandedUrls = rawLinks.flatMap((rawUrl) => {
     const url = addEchToVlessLink(rawUrl, latestEch);
-    return {
-      index: index + 1,
-      name: nameOf(url, index),
-      protocol: protocolLabels[protocolOf(url)] || protocolOf(url).toUpperCase(),
-      url
-    };
+    return expandVlessLinkByHosts(url, customHosts);
   });
+  const links = expandedUrls.map((url, index) => ({
+    index: index + 1,
+    name: nameOf(url, index),
+    protocol: protocolLabels[protocolOf(url)] || protocolOf(url).toUpperCase(),
+    url
+  }));
 
   const publicEmail = encodeURIComponent(email);
   const key = ACCESS_KEY || undefined;
@@ -287,6 +391,17 @@ if (SECRET_PATH) {
 }
 
 const router = express.Router();
+
+router.get(['/hosts', '/hosts.html'], requireAccessKey, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'hosts.html'));
+});
+
+router.get('/hosts-env.js', (req, res) => {
+  res.type('application/javascript; charset=utf-8');
+  res.set('Cache-Control', 'no-store');
+  res.send(`window.__HOSTS_API_PATH__ = ${JSON.stringify(HOSTS_API_PATH)};\n`);
+});
+
 router.use(express.static(path.join(__dirname, 'public'), { extensions: ['html'] }));
 
 router.get('/', (req, res) => {
@@ -295,6 +410,29 @@ router.get('/', (req, res) => {
 
 router.get('/u/:email', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'user.html'));
+});
+
+router.get(HOSTS_API_PATH, requireAccessKey, async (req, res) => {
+  try {
+    const text = await readHostsText();
+    res.set('Cache-Control', 'no-store');
+    res.json({ success: true, obj: { text, hosts: hostsFromText(text), updatedAt: new Date().toISOString() } });
+  } catch (err) {
+    console.error(`[hosts-api:get:${HOSTS_API_PATH}]`, err);
+    res.status(500).json({ success: false, msg: err.message || 'Unexpected error.' });
+  }
+});
+
+router.post(HOSTS_API_PATH, requireAccessKey, async (req, res) => {
+  try {
+    const text = req.body?.text ?? req.body?.hosts ?? '';
+    const normalized = await writeHostsText(text);
+    res.set('Cache-Control', 'no-store');
+    res.json({ success: true, obj: { text: normalized, hosts: hostsFromText(normalized), updatedAt: new Date().toISOString() } });
+  } catch (err) {
+    console.error(`[hosts-api:post:${HOSTS_API_PATH}]`, err);
+    res.status(500).json({ success: false, msg: err.message || 'Unexpected error.' });
+  }
 });
 
 router.get('/api/user/:email', requireAccessKey, async (req, res) => {
@@ -350,4 +488,5 @@ app.listen(PORT, () => {
   const publicRoot = `${PUBLIC_BASE_URL}${SECRET_PATH || ''}/`;
   console.log(`Subscription portal is running on http://localhost:${PORT}`);
   console.log(`Public root: ${publicRoot}`);
+  console.log(`Hosts API path: ${SECRET_PATH || ''}${HOSTS_API_PATH}`);
 });
