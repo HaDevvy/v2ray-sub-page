@@ -20,7 +20,7 @@ COPY server.js ./
 COPY ech-updater-data ./ech-updater-data
 COPY public ./public
 
-RUN mkdir -p /app/data \
+RUN mkdir -p /app/data/hosts \
   && chown -R node:node /app
 USER node
 

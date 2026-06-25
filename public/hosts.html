@@ -10,27 +10,37 @@
   <main class="shell">
     <header class="topbar">
       <a id="homeLink" class="brand" href="./">Subscription Panel</a>
-      <span id="statusPill" class="status-pill">در حال خواندن فایل</span>
+      <span id="statusPill" class="status-pill">host لازم است</span>
     </header>
 
     <section class="card hero compact hosts-hero">
       <div>
-        <div class="badge">Host Overrides</div>
-        <h1>مدیریت هاست‌های اضافه</h1>
-        <p>هر host را در یک خط بنویسید. هنگام ساخت خروجی اشتراک، کانفیگ اصلی حفظ می‌شود و برای هر host این فایل، یک کانفیگ VLESS جدید با همان پورت و پارامترها ساخته می‌شود.</p>
+        <div class="badge">Per-host Overrides</div>
+        <h1>مدیریت هاست‌های جایگزین برای هر host اصلی</h1>
+        <p>اول host اصلی کانفیگ را وارد کنید؛ مثلا <code class="inline-code">market.hqmq.com</code>. بعد هر host جایگزین را در یک خط بنویسید. فقط کانفیگ‌هایی که host اصلی‌شان برابر همین مقدار باشد، با این فایل expand می‌شوند.</p>
       </div>
+    </section>
+
+    <section class="card action-card hosts-target-card">
+      <h2>انتخاب host اصلی</h2>
+      <label for="targetHost" class="muted">این مقدار همان host داخل بخش uuid@host:port کانفیگ VLESS است.</label>
+      <div class="input-row">
+        <input id="targetHost" type="text" spellcheck="false" placeholder="market.hqmq.com" />
+        <button id="loadTargetHost" type="button">خواندن فایل این host</button>
+      </div>
+      <p id="fileHint" class="muted">ابتدا host اصلی را وارد کنید.</p>
     </section>
 
     <section class="grid two hosts-grid">
       <form id="hostsForm" class="card action-card">
         <div class="section-head">
-          <h2>ویرایش فایل hosts.txt</h2>
-          <span id="hostCount" class="muted">۰ هاست</span>
+          <h2>ویرایش فایل txt مخصوص این host</h2>
+          <span id="hostCount" class="muted">۰ هاست جایگزین</span>
         </div>
-        <label for="hostsText" class="muted">هر خط فقط یک host، مثل: host1.example.com</label>
-        <textarea id="hostsText" spellcheck="false" placeholder="host1.example.com&#10;host2.example.com&#10;host3.example.com"></textarea>
+        <label for="hostsText" class="muted">هر خط فقط یک host جایگزین، مثل: cdn1.example.com</label>
+        <textarea id="hostsText" spellcheck="false" placeholder="cdn1.example.com&#10;cdn2.example.com&#10;cdn3.example.com"></textarea>
         <div class="button-row">
-          <button type="submit">ذخیره در فایل txt</button>
+          <button type="submit">ذخیره در فایل txt همین host</button>
           <button id="reloadHosts" class="small ghost" type="button">بارگذاری دوباره</button>
         </div>
         <p class="muted">خط‌های خالی، خط‌هایی که با # شروع شوند، آدرس‌های دارای http/https و مقدارهای دارای فاصله، پورت، /، ? یا @ ذخیره نمی‌شوند.</p>
@@ -38,8 +48,8 @@
 
       <section class="card action-card">
         <h2>محتوای فعلی فایل</h2>
-        <p>این همان محتوایی است که سرور از فایل txt می‌خواند و برای ساخت کانفیگ‌های اضافه استفاده می‌کند.</p>
-        <code id="hostsPreview">در حال دریافت...</code>
+        <p>این محتوا فقط برای host انتخاب‌شده استفاده می‌شود؛ نه برای همه‌ی کانفیگ‌ها.</p>
+        <code id="hostsPreview">برای خواندن یا ذخیره، اول host اصلی را وارد کنید.</code>
       </section>
     </section>
   </main>

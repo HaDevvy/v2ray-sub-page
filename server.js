@@ -17,9 +17,9 @@ const ACCESS_KEY = process.env.ACCESS_KEY || '';
 const ECH_FILE_PATH = process.env.ECH_FILE_PATH
   ? path.resolve(__dirname, process.env.ECH_FILE_PATH)
   : path.join(__dirname, 'ech-updater-data', 'last_ech.txt');
-const HOSTS_FILE_PATH = process.env.HOSTS_FILE_PATH
-  ? path.resolve(__dirname, process.env.HOSTS_FILE_PATH)
-  : path.join(__dirname, 'data', 'hosts.txt');
+const HOSTS_DIR_PATH = process.env.HOSTS_DIR_PATH
+  ? path.resolve(__dirname, process.env.HOSTS_DIR_PATH)
+  : path.join(__dirname, 'data', 'hosts');
 const HOSTS_API_PATH = normalizeRoutePath(process.env.HOSTS_API_PATH, '/api/hosts');
 
 function normalizeRoutePath(value, fallback) {
@@ -136,6 +136,21 @@ async function readLatestEch() {
   }
 }
 
+
+function normalizeHostValue(value = '') {
+  const host = String(value).trim().toLowerCase().replace(/\.+$/, '');
+  if (!host || host.length > 253) return '';
+  if (/^https?:\/\//i.test(host) || /[\s/:?#@\\]/.test(host)) return '';
+  if (!/^[a-z0-9.-]+$/.test(host)) return '';
+
+  const labels = host.split('.');
+  if (labels.some((label) => !label || label.length > 63 || label.startsWith('-') || label.endsWith('-'))) {
+    return '';
+  }
+
+  return host;
+}
+
 function normalizeHostsText(text = '') {
   const seen = new Set();
   const hosts = [];
@@ -145,11 +160,11 @@ function normalizeHostsText(text = '') {
     .map((line) => line.trim())
     .forEach((line) => {
       if (!line || line.startsWith('#')) return;
-      if (/^https?:\/\//i.test(line) || /[\s/:?#@]/.test(line)) return;
-      const key = line.toLowerCase();
-      if (seen.has(key)) return;
-      seen.add(key);
-      hosts.push(line);
+      const host = normalizeHostValue(line);
+      if (!host) return;
+      if (seen.has(host)) return;
+      seen.add(host);
+      hosts.push(host);
     });
 
   return hosts.join('\n');
@@ -164,26 +179,49 @@ async function ensureWritableFileParent(filePath) {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
 }
 
-async function readHostsText() {
+function targetHostFile(targetHostValue) {
+  const targetHost = normalizeHostValue(targetHostValue);
+  if (!targetHost) {
+    const error = new Error('Valid host query parameter is required. Example: ?host=market.hqmq.com');
+    error.status = 400;
+    throw error;
+  }
+
+  return {
+    targetHost,
+    filePath: path.join(HOSTS_DIR_PATH, `${targetHost}.txt`)
+  };
+}
+
+async function readHostsTextForHost(targetHostValue) {
+  const { targetHost, filePath } = targetHostFile(targetHostValue);
   try {
-    return normalizeHostsText(await fs.readFile(HOSTS_FILE_PATH, 'utf8'));
+    return { targetHost, text: normalizeHostsText(await fs.readFile(filePath, 'utf8')) };
   } catch (err) {
     if (err?.code !== 'ENOENT') {
-      console.warn(`[hosts] Cannot read ${HOSTS_FILE_PATH}: ${err.message}`);
+      console.warn(`[hosts] Cannot read ${filePath}: ${err.message}`);
     }
-    return '';
+    return { targetHost, text: '' };
   }
 }
 
-async function readCustomHosts() {
-  return hostsFromText(await readHostsText());
+async function readCustomHostsForSourceHost(sourceHostValue, cache = new Map()) {
+  const sourceHost = normalizeHostValue(sourceHostValue);
+  if (!sourceHost) return [];
+
+  if (cache.has(sourceHost)) return cache.get(sourceHost);
+  const { text } = await readHostsTextForHost(sourceHost);
+  const hosts = hostsFromText(text).filter((host) => host !== sourceHost);
+  cache.set(sourceHost, hosts);
+  return hosts;
 }
 
-async function writeHostsText(text) {
+async function writeHostsTextForHost(targetHostValue, text) {
+  const { targetHost, filePath } = targetHostFile(targetHostValue);
   const normalized = normalizeHostsText(text);
-  await ensureWritableFileParent(HOSTS_FILE_PATH);
-  await fs.writeFile(HOSTS_FILE_PATH, normalized ? `${normalized}\n` : '', 'utf8');
-  return normalized;
+  await ensureWritableFileParent(filePath);
+  await fs.writeFile(filePath, normalized ? `${normalized}\n` : '', 'utf8');
+  return { targetHost, text: normalized };
 }
 
 
@@ -219,6 +257,26 @@ function addEchToVlessLink(link, echValue) {
 
   const nextQuery = setQueryParamPreservingOrder(query, 'ech', ech, ['allowInsecure', 'insecure']);
   return `${base}${nextQuery ? `?${nextQuery}` : ''}${hash}`;
+}
+
+
+function vlessAuthorityHost(link) {
+  const rawLink = String(link || '');
+  if (protocolOf(rawLink) !== 'vless') return '';
+
+  const hashIndex = rawLink.indexOf('#');
+  const beforeHash = hashIndex >= 0 ? rawLink.slice(0, hashIndex) : rawLink;
+  const queryIndex = beforeHash.indexOf('?');
+  const beforeQuery = queryIndex >= 0 ? beforeHash.slice(0, queryIndex) : beforeHash;
+
+  const atIndex = beforeQuery.lastIndexOf('@');
+  if (atIndex < 0) return '';
+
+  const authorityAfterAt = beforeQuery.slice(atIndex + 1);
+  const portSeparatorIndex = authorityAfterAt.lastIndexOf(':');
+  if (portSeparatorIndex <= 0) return '';
+
+  return normalizeHostValue(authorityAfterAt.slice(0, portSeparatorIndex));
 }
 
 function replaceVlessAuthorityHost(link, host) {
@@ -331,12 +389,15 @@ async function loadUser(email) {
 
   const subPayload = await panelGet(`/panel/api/clients/subLinks/${encodeURIComponent(client.subId)}`);
   const latestEch = await readLatestEch();
-  const customHosts = await readCustomHosts();
   const rawLinks = Array.isArray(subPayload?.obj) ? subPayload.obj.filter(Boolean) : [];
-  const expandedUrls = rawLinks.flatMap((rawUrl) => {
+  const sourceHostCache = new Map();
+  const expandedUrlGroups = await Promise.all(rawLinks.map(async (rawUrl) => {
     const url = addEchToVlessLink(rawUrl, latestEch);
+    const sourceHost = vlessAuthorityHost(url);
+    const customHosts = await readCustomHostsForSourceHost(sourceHost, sourceHostCache);
     return expandVlessLinkByHosts(url, customHosts);
-  });
+  }));
+  const expandedUrls = expandedUrlGroups.flat();
   const links = expandedUrls.map((url, index) => ({
     index: index + 1,
     name: nameOf(url, index),
@@ -414,24 +475,31 @@ router.get('/u/:email', (req, res) => {
 
 router.get(HOSTS_API_PATH, requireAccessKey, async (req, res) => {
   try {
-    const text = await readHostsText();
+    const { targetHost, text } = await readHostsTextForHost(req.query.host);
     res.set('Cache-Control', 'no-store');
-    res.json({ success: true, obj: { text, hosts: hostsFromText(text), updatedAt: new Date().toISOString() } });
+    res.json({
+      success: true,
+      obj: { targetHost, text, hosts: hostsFromText(text), updatedAt: new Date().toISOString() }
+    });
   } catch (err) {
     console.error(`[hosts-api:get:${HOSTS_API_PATH}]`, err);
-    res.status(500).json({ success: false, msg: err.message || 'Unexpected error.' });
+    res.status(err.status || 500).json({ success: false, msg: err.message || 'Unexpected error.' });
   }
 });
 
 router.post(HOSTS_API_PATH, requireAccessKey, async (req, res) => {
   try {
+    const targetHostValue = req.query.host ?? req.body?.host;
     const text = req.body?.text ?? req.body?.hosts ?? '';
-    const normalized = await writeHostsText(text);
+    const { targetHost, text: normalized } = await writeHostsTextForHost(targetHostValue, text);
     res.set('Cache-Control', 'no-store');
-    res.json({ success: true, obj: { text: normalized, hosts: hostsFromText(normalized), updatedAt: new Date().toISOString() } });
+    res.json({
+      success: true,
+      obj: { targetHost, text: normalized, hosts: hostsFromText(normalized), updatedAt: new Date().toISOString() }
+    });
   } catch (err) {
     console.error(`[hosts-api:post:${HOSTS_API_PATH}]`, err);
-    res.status(500).json({ success: false, msg: err.message || 'Unexpected error.' });
+    res.status(err.status || 500).json({ success: false, msg: err.message || 'Unexpected error.' });
   }
 });
 

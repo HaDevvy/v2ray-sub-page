@@ -13,7 +13,7 @@
 - خروجی خام newline-separated: `/sub/:email?format=raw`
 - QR Code برای subscription
 - اضافه‌کردن خودکار پارامتر `ech` به کانفیگ‌های `vless://` از فایل `ech-updater-data/last_ech.txt`
-- مدیریت هاست‌های جایگزین از صفحه‌ی `/hosts`، ذخیره در فایل txt، و امکان تغییر مسیر API مدیریت هاست‌ها
+- مدیریت هاست‌های جایگزین به‌صورت جداگانه برای هر host اصلی از صفحه‌ی `/hosts`، ذخیره در فایل‌های txt جدا، و امکان تغییر مسیر API مدیریت هاست‌ها
 - نگه‌داشتن توکن در `.env`
 - گزینه‌ی `SECRET_PATH` برای قرار دادن کل پروژه پشت مسیر مخفی
 - گزینه‌ی `ACCESS_KEY` برای محدودکردن دسترسی به لینک‌ها
@@ -56,7 +56,7 @@ PORT=3000
 SECRET_PATH=
 ACCESS_KEY=
 ECH_FILE_PATH=./ech-updater-data/last_ech.txt
-HOSTS_FILE_PATH=./data/hosts.txt
+HOSTS_DIR_PATH=./data/hosts
 HOSTS_API_PATH=/api/hosts
 ```
 
@@ -96,9 +96,9 @@ ECH_FILE_PATH=/path/to/ech-updater-data/last_ech.txt
 ```
 
 
-## مدیریت هاست‌های اضافه
+## مدیریت هاست‌های جایگزین برای هر host اصلی
 
-یک صفحه‌ی جدید برای مدیریت hostها اضافه شده است:
+صفحه‌ی مدیریت hostها:
 
 ```text
 http://localhost:3000/hosts
@@ -116,13 +116,55 @@ http://localhost:3000/my-secret-path/hosts
 http://localhost:3000/my-secret-path/hosts?key=ACCESS_KEY
 ```
 
-در این صفحه می‌توانی هر host را در یک خط بنویسی و ذخیره کنی. محتوا در فایل txt ذخیره می‌شود. مسیر پیش‌فرض فایل:
+در این نسخه، hostهای جایگزین دیگر یک فایل مشترک برای همه‌ی کانفیگ‌ها ندارند. برای هر host اصلی، یک فایل txt جدا ساخته می‌شود. مثلا اگر کانفیگ اصلی این باشد:
 
-```env
-HOSTS_FILE_PATH=./data/hosts.txt
+```text
+vless://uuid@market.hqmq.com:443?...
 ```
 
-مسیر API خواندن/نوشتن همین فایل به صورت پیش‌فرض `/api/hosts` است. اگر نمی‌خواهی این API با مسیر عمومی `/api/hosts` در دسترس باشد، در `.env` یک مسیر اختصاصی بده:
+فایل جایگزین‌های آن داخل این مسیر ذخیره می‌شود:
+
+```text
+./data/hosts/market.hqmq.com.txt
+```
+
+مسیر پیش‌فرض فولدر فایل‌ها:
+
+```env
+HOSTS_DIR_PATH=./data/hosts
+```
+
+می‌توانی صفحه را مستقیم برای یک host مشخص باز کنی:
+
+```text
+http://localhost:3000/hosts?host=market.hqmq.com
+```
+
+یا با `SECRET_PATH` و `ACCESS_KEY`:
+
+```text
+http://localhost:3000/my-secret-path/hosts?host=market.hqmq.com&key=ACCESS_KEY
+```
+
+در textarea هر host جایگزین را در یک خط بنویس:
+
+```text
+host1.example.com
+host2.example.com
+host3.example.com
+```
+
+برای هر کانفیگ `vless://`، خروجی اشتراک اول کانفیگ اصلی را نگه می‌دارد. بعد فقط اگر برای host اصلی همان کانفیگ فایل txt وجود داشته باشد، به تعداد hostهای داخل همان فایل، کانفیگ اضافه می‌سازد. فقط بخش host در این قسمت تغییر می‌کند:
+
+```text
+vless://uuid@HOST:port?...
+```
+
+پورت، query، `ech`, `sni`, `path` و بقیه‌ی پارامترها همان مقدار کانفیگ اصلی باقی می‌مانند.
+
+### API مدیریت hostهای جایگزین
+
+مسیر API خواندن/نوشتن فایل‌ها به صورت پیش‌فرض `/api/hosts` است. اگر نمی‌خواهی این API با مسیر عمومی `/api/hosts` در دسترس باشد، در `.env` یک مسیر اختصاصی بده:
 
 ```env
 HOSTS_API_PATH=private-hosts-api
@@ -134,31 +176,44 @@ HOSTS_API_PATH=private-hosts-api
 http://localhost:3000/private-hosts-api
 ```
 
-و اگر `SECRET_PATH` هم فعال باشد، مسیر کامل زیر استفاده می‌شود:
+و اگر `SECRET_PATH` هم فعال باشد:
 
 ```text
 http://localhost:3000/my-secret-path/private-hosts-api
 ```
 
-صفحه‌ی `/hosts` خودش مسیر جدید را از سرور می‌خواند، پس لازم نیست داخل `public/hosts.js` چیزی را دستی عوض کنی.
+برای اینکه مشخص کنی کدام فایل txt خوانده یا نوشته شود، پارامتر `host` لازم است.
 
-نمونه‌ی فایل:
+خواندن فایل مخصوص `market.hqmq.com`:
 
-```text
-host1.example.com
-host2.example.com
-host3.example.com
+```bash
+curl "http://localhost:3000/private-hosts-api?host=market.hqmq.com&key=ACCESS_KEY"
 ```
 
-برای هر کانفیگ `vless://`، خروجی اشتراک اول کانفیگ اصلی را نگه می‌دارد و بعد به تعداد hostهای داخل فایل، کانفیگ اضافه می‌سازد. فقط بخش host در این قسمت تغییر می‌کند:
+نوشتن فایل مخصوص `market.hqmq.com`:
 
-```text
-vless://uuid@HOST:port?...
+```bash
+curl -X POST "http://localhost:3000/private-hosts-api?host=market.hqmq.com&key=ACCESS_KEY" \
+  -H "Content-Type: application/json" \
+  --data-raw "{\"text\":\"host1.example.com\nhost2.example.com\"}"
 ```
 
-پورت، query، `ech`، `sni`، `path` و بقیه‌ی پارامترها همان مقدار کانفیگ اصلی باقی می‌مانند.
+پاسخ API شامل `targetHost` است تا مطمئن شوی دقیقاً فایل همان host تغییر کرده:
 
-برای Docker، مسیر `/app/data` در `docker-compose.yml` به یک volume وصل شده تا فایل hosts بعد از rebuild از بین نرود. اگر `HOSTS_API_PATH` را عوض می‌کنی، مقدار آن را داخل فایل `.env` مربوط به Docker هم بگذار.
+```json
+{
+  "success": true,
+  "obj": {
+    "targetHost": "market.hqmq.com",
+    "text": "host1.example.com\nhost2.example.com",
+    "hosts": ["host1.example.com", "host2.example.com"]
+  }
+}
+```
+
+صفحه‌ی `/hosts` خودش مسیر API را از سرور می‌خواند، پس اگر `HOSTS_API_PATH` را عوض کنی لازم نیست داخل `public/hosts.js` چیزی را دستی تغییر بدهی.
+
+برای Docker، مسیر `/app/data` در `docker-compose.yml` به یک volume وصل شده تا فایل‌های txt بعد از rebuild از بین نروند. اگر `HOSTS_API_PATH` یا `HOSTS_DIR_PATH` را عوض می‌کنی، مقدار آن را داخل فایل `.env` مربوط به Docker هم بگذار.
 
 ## Secret Path
 
@@ -230,7 +285,7 @@ PORT=3000
 SECRET_PATH=my-secret-path
 ACCESS_KEY=یک-کلید-اختیاری-ولی-پیشنهادی
 ECH_FILE_PATH=./ech-updater-data/last_ech.txt
-HOSTS_FILE_PATH=./data/hosts.txt
+HOSTS_DIR_PATH=./data/hosts
 HOSTS_API_PATH=/api/hosts
 ```
 

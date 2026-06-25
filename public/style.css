@@ -262,3 +262,11 @@ textarea {
 textarea:focus { border-color: rgba(131, 247, 207, 0.7); }
 .hosts-hero { margin-bottom: 18px; }
 .hosts-grid code { min-height: 260px; }
+.inline-code {
+  display: inline;
+  direction: ltr;
+  padding: 2px 7px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+.hosts-target-card { margin-bottom: 18px; }

@@ -81,7 +81,8 @@ const panel = http.createServer((req, res) => {
       msg: '',
       obj: [
         'vmess://mock-config-one#Demo%20VMess',
-        'vless://mock-config-two@example.com:443?encryption=none&allowInsecure=0&type=ws#Demo%20VLESS'
+        'vless://mock-config-two@example.com:443?encryption=none&allowInsecure=0&type=ws#Demo%20VLESS',
+        'vless://mock-config-market@market.hqmq.com:443?encryption=none&allowInsecure=0&type=ws#Demo%20Market%20VLESS'
       ]
     }));
     return;
@@ -93,9 +94,11 @@ const panel = http.createServer((req, res) => {
 
 const testDataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'v2-sub-page-data-'));
 const echFilePath = path.join(testDataDir, 'last_ech.txt');
-const hostsFilePath = path.join(testDataDir, 'hosts.txt');
+const hostsDirPath = path.join(testDataDir, 'hosts');
+await fs.mkdir(hostsDirPath, { recursive: true });
 await fs.writeFile(echFilePath, 'A+B/C=\n');
-await fs.writeFile(hostsFilePath, 'alt1.example.com\nalt2.example.com\n');
+await fs.writeFile(path.join(hostsDirPath, 'example.com.txt'), 'alt1.example.com\nalt2.example.com\n');
+await fs.writeFile(path.join(hostsDirPath, 'market.hqmq.com.txt'), 'market-alt.example.com\n');
 
 const panelPort = await listen(panel);
 const appPortServer = http.createServer();
@@ -113,7 +116,7 @@ const child = spawn(process.execPath, ['server.js'], {
     SECRET_PATH: 'secret-test',
     ACCESS_KEY: 'test-key',
     ECH_FILE_PATH: echFilePath,
-    HOSTS_FILE_PATH: hostsFilePath,
+    HOSTS_DIR_PATH: hostsDirPath,
     HOSTS_API_PATH: 'private-hosts-api'
   },
   stdio: ['ignore', 'pipe', 'pipe']
@@ -138,8 +141,8 @@ try {
     throw new Error(`user page failed: ${page.status}`);
   }
 
-  const hostsPage = await request(`${base}/secret-test/hosts?key=test-key`);
-  if (hostsPage.status !== 200 || !hostsPage.text.includes('مدیریت هاست‌های اضافه')) {
+  const hostsPage = await request(`${base}/secret-test/hosts?host=example.com&key=test-key`);
+  if (hostsPage.status !== 200 || !hostsPage.text.includes('مدیریت هاست‌های جایگزین برای هر host اصلی')) {
     throw new Error(`hosts page failed: ${hostsPage.status}`);
   }
 
@@ -153,24 +156,40 @@ try {
     throw new Error(`default hosts api should be hidden when HOSTS_API_PATH is custom, got ${oldHostsApi.status}`);
   }
 
-  const hostsApi = await request(`${base}/secret-test/private-hosts-api?key=test-key`);
+  const missingHostApi = await request(`${base}/secret-test/private-hosts-api?key=test-key`);
+  if (missingHostApi.status !== 400) {
+    throw new Error(`hosts api should require host query parameter, got ${missingHostApi.status}`);
+  }
+
+  const hostsApi = await request(`${base}/secret-test/private-hosts-api?host=example.com&key=test-key`);
   if (hostsApi.status !== 200) throw new Error(`hosts api failed: ${hostsApi.status} ${hostsApi.text}`);
   const hostsJson = JSON.parse(hostsApi.text);
-  if (!hostsJson.success || hostsJson.obj.hosts.length !== 2 || !hostsJson.obj.text.includes('alt1.example.com')) {
+  if (!hostsJson.success || hostsJson.obj.targetHost !== 'example.com' || hostsJson.obj.hosts.length !== 2 || !hostsJson.obj.text.includes('alt1.example.com')) {
     throw new Error(`hosts api payload is invalid: ${hostsApi.text}`);
+  }
+
+  const marketHostsApi = await request(`${base}/secret-test/private-hosts-api?host=market.hqmq.com&key=test-key`);
+  if (marketHostsApi.status !== 200 || !marketHostsApi.text.includes('market-alt.example.com')) {
+    throw new Error(`market hosts api failed: ${marketHostsApi.status} ${marketHostsApi.text}`);
   }
 
   const api = await request(`${base}/secret-test/api/user/demo-user?key=test-key`);
   if (api.status !== 200) throw new Error(`api failed: ${api.status} ${api.text}`);
   const apiJson = JSON.parse(api.text);
-  if (!apiJson.success || apiJson.obj.links.length !== 4) throw new Error('api payload is invalid');
+  if (!apiJson.success || apiJson.obj.links.length !== 6) throw new Error('api payload is invalid');
   const vlessFromApi = apiJson.obj.links.find((item) => item.protocol === 'VLESS')?.url || '';
   if (!vlessFromApi.includes('allowInsecure=0&ech=A%2BB%2FC%3D&type=ws')) {
     throw new Error(`VLESS ECH was not injected in API response: ${vlessFromApi}`);
   }
   const expandedHosts = apiJson.obj.links.map((item) => item.url).join('\n');
   if (!expandedHosts.includes('vless://mock-config-two@alt1.example.com:443') || !expandedHosts.includes('vless://mock-config-two@alt2.example.com:443')) {
-    throw new Error(`VLESS host expansion failed: ${expandedHosts}`);
+    throw new Error(`VLESS example.com host expansion failed: ${expandedHosts}`);
+  }
+  if (!expandedHosts.includes('vless://mock-config-market@market-alt.example.com:443')) {
+    throw new Error(`VLESS market.hqmq.com host expansion failed: ${expandedHosts}`);
+  }
+  if (expandedHosts.includes('vless://mock-config-market@alt1.example.com:443')) {
+    throw new Error(`VLESS host expansion leaked between source hosts: ${expandedHosts}`);
   }
 
   const serializedClient = JSON.stringify(apiJson.obj.client);
@@ -186,13 +205,13 @@ try {
   if (!decoded.includes('vmess://mock-config-one') || !decoded.includes('vless://mock-config-two')) {
     throw new Error('subscription body is invalid');
   }
-  if (!decoded.includes('ech=A%2BB%2FC%3D') || !decoded.includes('@alt1.example.com:443')) {
-    throw new Error(`subscription body does not include encoded ECH and expanded hosts: ${decoded}`);
+  if (!decoded.includes('ech=A%2BB%2FC%3D') || !decoded.includes('@alt1.example.com:443') || !decoded.includes('@market-alt.example.com:443')) {
+    throw new Error(`subscription body does not include encoded ECH and per-source-host expanded hosts: ${decoded}`);
   }
 
   await fs.writeFile(echFilePath, 'NEW+ECH=\n');
 
-  const saveHosts = await request(`${base}/secret-test/private-hosts-api?key=test-key`, {
+  const saveHosts = await request(`${base}/secret-test/private-hosts-api?host=example.com&key=test-key`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ text: 'new-host.example.com\n# ignored\nhttps://ignored.example.com\nnew-host.example.com\n' })
@@ -208,11 +227,14 @@ try {
   if (!raw.text.includes('ech=NEW%2BECH%3D') || !raw.text.includes('@new-host.example.com:443')) {
     throw new Error(`raw subscription did not use updated ECH/hosts files: ${raw.text}`);
   }
+  if (!raw.text.includes('@market-alt.example.com:443') || raw.text.includes('mock-config-market@new-host.example.com:443')) {
+    throw new Error(`raw subscription did not keep per-source-host files isolated: ${raw.text}`);
+  }
 
   const qr = await request(`${base}/secret-test/qr?text=${encodeURIComponent('hello')}&key=test-key`);
   if (qr.status !== 200 || !qr.text.includes('<svg')) throw new Error('qr failed');
 
-  console.log('Smoke test passed. Routes, secret path, custom hosts API path, access key, panel proxy, host editor, subscription expansion, QR, ECH injection, and sensitive-field masking are OK.');
+  console.log('Smoke test passed. Routes, secret path, custom hosts API path, access key, panel proxy, per-source-host editor, subscription expansion, QR, ECH injection, and sensitive-field masking are OK.');
 } finally {
   child.kill('SIGTERM');
   panel.close();
