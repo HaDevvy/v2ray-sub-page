@@ -32,21 +32,25 @@
       </div>
     </section>
 
-    <section id="actions" class="grid two hidden">
-      <div class="card action-card">
-        <h2>لینک اشتراک</h2>
-        <p>این آدرس را به‌عنوان Subscription URL در کلاینت‌های پشتیبانی‌شده وارد کنید تا تنظیمات به‌صورت خودکار دریافت شوند.</p>
+    <section id="actions" class="actions-grid hidden">
+      <div class="card action-card subscription-action">
+        <h2>لینک اشتراک معمولی</h2>
+        <p>برای v2rayN، v2rayNG و کلاینت‌های سازگار، این لینک را به‌عنوان Subscription URL اضافه کنید.</p>
         <div class="copy-row">
-          <input id="subscriptionUrl" readonly />
+          <input id="subscriptionUrl" readonly aria-label="لینک اشتراک معمولی" />
           <button data-copy="#subscriptionUrl">کپی لینک</button>
         </div>
         <div class="button-row">
           <a id="openSub" class="button ghost" target="_blank" rel="noreferrer">نمایش خروجی اشتراک</a>
           <a id="openRawSub" class="button ghost" target="_blank" rel="noreferrer">نمایش خروجی خام</a>
         </div>
-        <p id="v2boxNotice" class="muted">اگر از اپلیکیشن V2Box استفاده می‌کنید از لینک‌های زیر استفاده کنید.</p>
+      </div>
+
+      <div class="card action-card v2box-action">
+        <h2>لینک مخصوص V2Box</h2>
+        <p id="v2boxNotice" class="notice">اگر از اپلیکیشن V2Box استفاده می‌کنید از لینک‌های زیر استفاده کنید.</p>
         <div class="copy-row">
-          <input id="v2boxSubscriptionUrl" readonly />
+          <input id="v2boxSubscriptionUrl" readonly aria-label="لینک اشتراک V2Box" />
           <button data-copy="#v2boxSubscriptionUrl">کپی لینک V2Box</button>
         </div>
         <div class="button-row">
@@ -54,9 +58,10 @@
           <a id="openRawV2boxSub" class="button ghost" target="_blank" rel="noreferrer">نمایش خام V2Box</a>
         </div>
       </div>
-      <div class="card action-card">
+
+      <div class="card action-card manual-action">
         <h2>دریافت دستی کانفیگ‌ها</h2>
-        <p>در صورت نیاز می‌توانید تمام لینک‌ها را یکجا کپی کرده و به‌صورت دستی در کلاینت وارد کنید.</p>
+        <p>در صورت نیاز می‌توانید همه‌ی کانفیگ‌های همین صفحه را یکجا کپی کرده و دستی در کلاینت وارد کنید.</p>
         <button id="copyAll" class="button full">کپی تمام کانفیگ‌ها</button>
       </div>
     </section>
