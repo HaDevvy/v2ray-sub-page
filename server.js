@@ -23,20 +23,29 @@ const ECH_CONFIG_PATH = process.env.ECH_CONFIG_PATH
 const HOSTS_DIR_PATH = process.env.HOSTS_DIR_PATH
   ? path.resolve(__dirname, process.env.HOSTS_DIR_PATH)
   : path.join(__dirname, 'data', 'hosts');
-const HOSTS_API_PATH = normalizeRoutePath(process.env.HOSTS_API_PATH, '/api/hosts');
+const HOST_SECRET_PATH = normalizeRoutePath(process.env.HOST_SECRET_PATH, '/hosts-secret', 'HOST_SECRET_PATH');
+const HOSTS_PAGE_PATH = joinRoutePaths(HOST_SECRET_PATH, '/hosts');
+const HOSTS_API_PATH = joinRoutePaths(HOST_SECRET_PATH, '/api');
+const HOSTS_ADMIN_KEY = process.env.HOSTS_ADMIN_KEY || process.env.ADMIN_KEY || ACCESS_KEY;
 
-function normalizeRoutePath(value, fallback) {
+function normalizeRoutePath(value, fallback, label = 'ROUTE_PATH') {
   if (!value) return fallback;
   const clean = String(value).trim().replace(/^\/+/, '').replace(/\/+$/, '');
   if (!clean) return fallback;
 
   const routePath = `/${clean}`;
   if (!/^\/[A-Za-z0-9/_-]+$/.test(routePath)) {
-    console.warn(`[config] HOSTS_API_PATH=${JSON.stringify(value)} is invalid. Falling back to ${fallback}`);
+    console.warn(`[config] ${label}=${JSON.stringify(value)} is invalid. Falling back to ${fallback}`);
     return fallback;
   }
 
   return routePath;
+}
+
+function joinRoutePaths(prefix, suffix) {
+  const left = String(prefix || '').replace(/\/+$/, '');
+  const right = String(suffix || '').replace(/^\/+/, '');
+  return `${left}/${right}` || '/';
 }
 
 function normalizeSecretPath(value) {
@@ -92,6 +101,22 @@ function requireAccessKey(req, res, next) {
   if (!ACCESS_KEY) return next();
   if (req.query.key === ACCESS_KEY || req.get('x-access-key') === ACCESS_KEY) return next();
   return res.status(401).json({ success: false, msg: 'Access key is required.' });
+}
+
+function requireHostsAdmin(req, res, next) {
+  const adminKey = String(HOSTS_ADMIN_KEY || '').trim();
+  if (!adminKey) {
+    return res.status(403).json({
+      success: false,
+      msg: 'HOSTS_ADMIN_KEY or ACCESS_KEY must be set before the hosts manager can be used.'
+    });
+  }
+
+  if (req.query.key === adminKey || req.query.adminKey === adminKey || req.get('x-access-key') === adminKey || req.get('x-admin-key') === adminKey) {
+    return next();
+  }
+
+  return res.status(401).json({ success: false, msg: 'Admin access key is required.' });
 }
 
 function mask(value, visible = 6) {
@@ -596,6 +621,27 @@ function publicUrl(pathname, query = {}) {
   return `${PUBLIC_BASE_URL}${SECRET_PATH}${cleanPath}${qs ? `?${qs}` : ''}`;
 }
 
+function appRoutePath(pathname = '/') {
+  const cleanPath = String(pathname || '/').startsWith('/') ? String(pathname || '/') : `/${pathname}`;
+  return `${SECRET_PATH}${cleanPath}` || '/';
+}
+
+async function sendHostsPage(req, res) {
+  const template = await fs.readFile(path.join(__dirname, 'public', 'hosts.html'), 'utf8');
+  const appBaseHref = `${SECRET_PATH || ''}/`;
+  const boot = [
+    `<base href=${JSON.stringify(appBaseHref)}>` ,
+    '<script>',
+    `window.__HOSTS_API_PATH__ = ${JSON.stringify(appRoutePath(HOSTS_API_PATH))};`,
+    `window.__APP_BASE_PATH__ = ${JSON.stringify(SECRET_PATH || '')};`,
+    '</script>'
+  ].join('\n');
+
+  res.type('html; charset=utf-8');
+  res.set('Cache-Control', 'no-store');
+  res.send(template.replace('<head>', `<head>\n  ${boot.replace(/\n/g, '\n  ')}`));
+}
+
 async function panelGet(pathname) {
   const url = `${PANEL_BASE_URL}${pathname}`;
   const response = await fetch(url, {
@@ -722,14 +768,13 @@ if (SECRET_PATH) {
 
 const router = express.Router();
 
-router.get(['/hosts', '/hosts.html'], requireAccessKey, (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'hosts.html'));
-});
+router.get([HOSTS_PAGE_PATH, joinRoutePaths(HOST_SECRET_PATH, '/hosts.html')], requireHostsAdmin, sendHostsPage);
 
-router.get('/hosts-env.js', (req, res) => {
-  res.type('application/javascript; charset=utf-8');
-  res.set('Cache-Control', 'no-store');
-  res.send(`window.__HOSTS_API_PATH__ = ${JSON.stringify(HOSTS_API_PATH)};\n`);
+router.use((req, res, next) => {
+  if (['/hosts', '/hosts.html', '/hosts-env.js'].includes(req.path)) {
+    return res.status(404).sendFile(path.join(__dirname, 'public', '404.html'));
+  }
+  return next();
 });
 
 router.use(express.static(path.join(__dirname, 'public'), { extensions: ['html'] }));
@@ -742,7 +787,7 @@ router.get('/u/:email', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'user.html'));
 });
 
-router.get(HOSTS_API_PATH, requireAccessKey, async (req, res) => {
+router.get(HOSTS_API_PATH, requireHostsAdmin, async (req, res) => {
   try {
     const { targetHost, text } = await readHostsTextForHost(req.query.host);
     res.set('Cache-Control', 'no-store');
@@ -756,7 +801,7 @@ router.get(HOSTS_API_PATH, requireAccessKey, async (req, res) => {
   }
 });
 
-router.post(HOSTS_API_PATH, requireAccessKey, async (req, res) => {
+router.post(HOSTS_API_PATH, requireHostsAdmin, async (req, res) => {
   try {
     const targetHostValue = req.query.host ?? req.body?.host;
     const text = req.body?.text ?? req.body?.hosts ?? '';
@@ -828,6 +873,7 @@ app.listen(PORT, () => {
   const publicRoot = `${PUBLIC_BASE_URL}${SECRET_PATH || ''}/`;
   console.log(`Subscription portal is running on http://localhost:${PORT}`);
   console.log(`Public root: ${publicRoot}`);
+  console.log(`Hosts page path: ${SECRET_PATH || ''}${HOSTS_PAGE_PATH}`);
   console.log(`Hosts API path: ${SECRET_PATH || ''}${HOSTS_API_PATH}`);
   console.log(`ECH config path: ${ECH_CONFIG_PATH}`);
 });

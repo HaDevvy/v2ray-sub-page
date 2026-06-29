@@ -17,7 +17,7 @@
 - QR Code برای subscription
 - اضافه‌کردن خودکار پارامتر `ech` به کانفیگ‌های `vless://` از فایل `ech-updater-data/last_ech.txt` با encode استاندارد، و ساخت خروجی جداگانه‌ی سازگار با V2Box
 - تنظیم سیاست ECH به ازای هر `sni`: حالت `ech`، حالت `off`، یا حالت `both`
-- مدیریت هاست‌های جایگزین به‌صورت جداگانه برای هر host اصلی از صفحه‌ی `/hosts`، ذخیره در فایل‌های txt جدا، و امکان تغییر مسیر API مدیریت هاست‌ها
+- مدیریت هاست‌های جایگزین به‌صورت جداگانه برای هر host اصلی از مسیر مخفی ادمین `HOST_SECRET_PATH/hosts`، ذخیره در فایل‌های txt جدا، و API مخفی `HOST_SECRET_PATH/api`
 - نگه‌داشتن توکن در `.env`
 - گزینه‌ی `SECRET_PATH` برای قرار دادن کل پروژه پشت مسیر مخفی
 - گزینه‌ی `ACCESS_KEY` برای محدودکردن دسترسی به لینک‌ها
@@ -68,7 +68,8 @@ ACCESS_KEY=
 ECH_FILE_PATH=./ech-updater-data/last_ech.txt
 ECH_CONFIG_PATH=./ech-updater-data/ech-config.json
 HOSTS_DIR_PATH=./data/hosts
-HOSTS_API_PATH=/api/hosts
+HOST_SECRET_PATH=hosts-secret
+HOSTS_ADMIN_KEY=
 ```
 
 اگر `PANEL_API_TOKEN` را با `Bearer ` شروع کنی، برنامه همان را استفاده می‌کند. اگر فقط خود توکن را بگذاری، خودش `Bearer` را اضافه می‌کند.
@@ -185,23 +186,26 @@ ECH_FILE_PATH=/path/to/ech-updater-data/last_ech.txt
 
 ## مدیریت هاست‌های جایگزین برای هر host اصلی
 
-صفحه‌ی مدیریت hostها:
+صفحه‌ی مدیریت hostها دیگر روی مسیر عمومی `/hosts` نیست. اول یک مسیر مخفی مخصوص مدیریت hostها تعریف کن:
 
-```text
-http://localhost:3000/hosts
+```env
+HOST_SECRET_PATH=hosts-secret
+HOSTS_ADMIN_KEY=ADMIN_ONLY_KEY
 ```
 
-اگر `SECRET_PATH` فعال باشد:
+بعد صفحه‌ی مدیریت این‌طور در دسترس است:
 
 ```text
-http://localhost:3000/my-secret-path/hosts
+http://localhost:3000/hosts-secret/hosts?key=ADMIN_ONLY_KEY
 ```
 
-اگر `ACCESS_KEY` فعال باشد، کلید را هم به آدرس اضافه کن:
+اگر `SECRET_PATH` هم فعال باشد، مسیر نهایی این می‌شود:
 
 ```text
-http://localhost:3000/my-secret-path/hosts?key=ACCESS_KEY
+http://localhost:3000/my-secret-path/hosts-secret/hosts?key=ADMIN_ONLY_KEY
 ```
+
+`HOSTS_ADMIN_KEY` فقط برای مدیریت hostهاست. اگر آن را خالی بگذاری، برنامه از `ACCESS_KEY` استفاده می‌کند؛ اگر هر دو خالی باشند، صفحه و API مدیریت hostها غیرفعال می‌شوند.
 
 در این نسخه، hostهای جایگزین دیگر یک فایل مشترک برای همه‌ی کانفیگ‌ها ندارند. برای هر host اصلی، یک فایل txt جدا ساخته می‌شود. مثلا اگر کانفیگ اصلی این باشد:
 
@@ -224,13 +228,13 @@ HOSTS_DIR_PATH=./data/hosts
 می‌توانی صفحه را مستقیم برای یک host مشخص باز کنی:
 
 ```text
-http://localhost:3000/hosts?host=market.hqmq.com
+http://localhost:3000/hosts-secret/hosts?host=market.hqmq.com&key=ADMIN_ONLY_KEY
 ```
 
-یا با `SECRET_PATH` و `ACCESS_KEY`:
+یا با `SECRET_PATH`:
 
 ```text
-http://localhost:3000/my-secret-path/hosts?host=market.hqmq.com&key=ACCESS_KEY
+http://localhost:3000/my-secret-path/hosts-secret/hosts?host=market.hqmq.com&key=ADMIN_ONLY_KEY
 ```
 
 در textarea هر host جایگزین را در یک خط بنویس:
@@ -251,36 +255,42 @@ vless://uuid@HOST:port?...
 
 ### API مدیریت hostهای جایگزین
 
-مسیر API خواندن/نوشتن فایل‌ها به صورت پیش‌فرض `/api/hosts` است. اگر نمی‌خواهی این API با مسیر عمومی `/api/hosts` در دسترس باشد، در `.env` یک مسیر اختصاصی بده:
+مسیر API دیگر جداگانه با `HOSTS_API_PATH` تنظیم نمی‌شود؛ همیشه از روی `HOST_SECRET_PATH` ساخته می‌شود:
 
 ```env
-HOSTS_API_PATH=private-hosts-api
+HOSTS_API_PATH = HOST_SECRET_PATH/api
 ```
 
-بعد از آن API این‌طوری می‌شود:
+مثلا اگر مقدار زیر را داشته باشی:
+
+```env
+HOST_SECRET_PATH=hosts-secret
+```
+
+API این‌طوری می‌شود:
 
 ```text
-http://localhost:3000/private-hosts-api
+http://localhost:3000/hosts-secret/api
 ```
 
 و اگر `SECRET_PATH` هم فعال باشد:
 
 ```text
-http://localhost:3000/my-secret-path/private-hosts-api
+http://localhost:3000/my-secret-path/hosts-secret/api
 ```
 
-برای اینکه مشخص کنی کدام فایل txt خوانده یا نوشته شود، پارامتر `host` لازم است.
+برای اینکه مشخص کنی کدام فایل txt خوانده یا نوشته شود، پارامتر `host` لازم است. این API فقط با `HOSTS_ADMIN_KEY`، یا در صورت خالی بودن آن با `ACCESS_KEY`، پاسخ می‌دهد.
 
 خواندن فایل مخصوص `market.hqmq.com`:
 
 ```bash
-curl "http://localhost:3000/private-hosts-api?host=market.hqmq.com&key=ACCESS_KEY"
+curl "http://localhost:3000/hosts-secret/api?host=market.hqmq.com&key=ADMIN_ONLY_KEY"
 ```
 
 نوشتن فایل مخصوص `market.hqmq.com`:
 
 ```bash
-curl -X POST "http://localhost:3000/private-hosts-api?host=market.hqmq.com&key=ACCESS_KEY" \
+curl -X POST "http://localhost:3000/hosts-secret/api?host=market.hqmq.com&key=ADMIN_ONLY_KEY" \
   -H "Content-Type: application/json" \
   --data-raw "{\"text\":\"host1.example.com\nhost2.example.com\"}"
 ```
@@ -298,9 +308,9 @@ curl -X POST "http://localhost:3000/private-hosts-api?host=market.hqmq.com&key=A
 }
 ```
 
-صفحه‌ی `/hosts` خودش مسیر API را از سرور می‌خواند، پس اگر `HOSTS_API_PATH` را عوض کنی لازم نیست داخل `public/hosts.js` چیزی را دستی تغییر بدهی.
+صفحه‌ی `HOST_SECRET_PATH/hosts` مسیر API را از سرور می‌گیرد، پس لازم نیست داخل `public/hosts.js` چیزی را دستی تغییر بدهی.
 
-برای Docker، مسیر `/app/data` در `docker-compose.yml` به یک volume وصل شده تا فایل‌های txt بعد از rebuild از بین نروند. اگر `HOSTS_API_PATH` یا `HOSTS_DIR_PATH` را عوض می‌کنی، مقدار آن را داخل فایل `.env` مربوط به Docker هم بگذار.
+برای Docker، مسیر `/app/data` در `docker-compose.yml` به یک volume وصل شده تا فایل‌های txt بعد از rebuild از بین نروند. اگر `HOST_SECRET_PATH`، `HOSTS_ADMIN_KEY` یا `HOSTS_DIR_PATH` را عوض می‌کنی، مقدار آن را داخل فایل `.env` مربوط به Docker هم بگذار.
 
 ## Secret Path
 
@@ -376,7 +386,8 @@ ACCESS_KEY=یک-کلید-اختیاری-ولی-پیشنهادی
 ECH_FILE_PATH=./ech-updater-data/last_ech.txt
 ECH_CONFIG_PATH=./ech-updater-data/ech-config.json
 HOSTS_DIR_PATH=./data/hosts
-HOSTS_API_PATH=/api/hosts
+HOST_SECRET_PATH=hosts-secret
+HOSTS_ADMIN_KEY=
 ```
 
 3. اجرا:

@@ -126,7 +126,8 @@ const child = spawn(process.execPath, ['server.js'], {
     ECH_FILE_PATH: echFilePath,
     ECH_CONFIG_PATH: echConfigPath,
     HOSTS_DIR_PATH: hostsDirPath,
-    HOSTS_API_PATH: 'private-hosts-api'
+    HOST_SECRET_PATH: 'host-secret-test',
+    HOSTS_ADMIN_KEY: 'admin-key'
   },
   stdio: ['ignore', 'pipe', 'pipe']
 });
@@ -149,6 +150,9 @@ try {
   if (page.status !== 200 || !page.text.includes('اشتراک کاربر')) {
     throw new Error(`user page failed: ${page.status}`);
   }
+  if (page.text.includes('مدیریت هاست‌های جایگزین')) {
+    throw new Error('hosts manager link should not be visible on the user page');
+  }
 
   const v2boxPage = await request(`${base}/secret-test/u/demo-user?compat=v2box&key=test-key`);
   if (v2boxPage.status !== 200 || !v2boxPage.text.includes('صفحه مخصوص V2Box')) {
@@ -160,34 +164,42 @@ try {
     throw new Error(`/v2box path should not exist anymore, got ${removedV2boxPath.status}`);
   }
 
-  const hostsPage = await request(`${base}/secret-test/hosts?host=example.com&key=test-key`);
+  const oldHostsPage = await request(`${base}/secret-test/hosts?host=example.com&key=admin-key`);
+  if (oldHostsPage.status !== 404) {
+    throw new Error(`old /hosts page should be hidden, got ${oldHostsPage.status}`);
+  }
+
+  const hostsPageAsUser = await request(`${base}/secret-test/host-secret-test/hosts?host=example.com&key=test-key`);
+  if (hostsPageAsUser.status !== 401) {
+    throw new Error(`hosts page should require admin key, got ${hostsPageAsUser.status}`);
+  }
+
+  const hostsPage = await request(`${base}/secret-test/host-secret-test/hosts?host=example.com&key=admin-key`);
   if (hostsPage.status !== 200 || !hostsPage.text.includes('مدیریت هاست‌های جایگزین برای هر host اصلی')) {
     throw new Error(`hosts page failed: ${hostsPage.status}`);
   }
-
-  const hostsEnv = await request(`${base}/secret-test/hosts-env.js`);
-  if (hostsEnv.status !== 200 || !hostsEnv.text.includes('/private-hosts-api')) {
-    throw new Error(`hosts env js failed: ${hostsEnv.status} ${hostsEnv.text}`);
+  if (!hostsPage.text.includes('/secret-test/host-secret-test/api')) {
+    throw new Error(`hosts page did not expose the derived hosts API path: ${hostsPage.text}`);
   }
 
-  const oldHostsApi = await request(`${base}/secret-test/api/hosts?key=test-key`);
+  const oldHostsApi = await request(`${base}/secret-test/api/hosts?key=admin-key`);
   if (oldHostsApi.status !== 404) {
-    throw new Error(`default hosts api should be hidden when HOSTS_API_PATH is custom, got ${oldHostsApi.status}`);
+    throw new Error(`default hosts api should be hidden, got ${oldHostsApi.status}`);
   }
 
-  const missingHostApi = await request(`${base}/secret-test/private-hosts-api?key=test-key`);
+  const missingHostApi = await request(`${base}/secret-test/host-secret-test/api?key=admin-key`);
   if (missingHostApi.status !== 400) {
     throw new Error(`hosts api should require host query parameter, got ${missingHostApi.status}`);
   }
 
-  const hostsApi = await request(`${base}/secret-test/private-hosts-api?host=example.com&key=test-key`);
+  const hostsApi = await request(`${base}/secret-test/host-secret-test/api?host=example.com&key=admin-key`);
   if (hostsApi.status !== 200) throw new Error(`hosts api failed: ${hostsApi.status} ${hostsApi.text}`);
   const hostsJson = JSON.parse(hostsApi.text);
   if (!hostsJson.success || hostsJson.obj.targetHost !== 'example.com' || hostsJson.obj.hosts.length !== 2 || !hostsJson.obj.text.includes('alt1.example.com')) {
     throw new Error(`hosts api payload is invalid: ${hostsApi.text}`);
   }
 
-  const marketHostsApi = await request(`${base}/secret-test/private-hosts-api?host=market.hqmq.com&key=test-key`);
+  const marketHostsApi = await request(`${base}/secret-test/host-secret-test/api?host=market.hqmq.com&key=admin-key`);
   if (marketHostsApi.status !== 200 || !marketHostsApi.text.includes('market-alt.example.com')) {
     throw new Error(`market hosts api failed: ${marketHostsApi.status} ${marketHostsApi.text}`);
   }
@@ -276,7 +288,7 @@ try {
 
   await fs.writeFile(echFilePath, 'NEW+ECH=\n');
 
-  const saveHosts = await request(`${base}/secret-test/private-hosts-api?host=example.com&key=test-key`, {
+  const saveHosts = await request(`${base}/secret-test/host-secret-test/api?host=example.com&key=admin-key`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ text: 'new-host.example.com\n# ignored\nhttps://ignored.example.com\nnew-host.example.com\n' })
@@ -313,7 +325,7 @@ try {
   const qr = await request(`${base}/secret-test/qr?text=${encodeURIComponent('hello')}&key=test-key`);
   if (qr.status !== 200 || !qr.text.includes('<svg')) throw new Error('qr failed');
 
-  console.log('Smoke test passed. Routes, secret path, custom hosts API path, access key, panel proxy, per-source-host editor, subscription expansion, QR, per-SNI ECH policy, standard and V2Box-compatible ECH encoding, and sensitive-field masking are OK.');
+  console.log('Smoke test passed. Routes, secret path, hosts secret path, access key, panel proxy, per-source-host editor, subscription expansion, QR, per-SNI ECH policy, standard and V2Box-compatible ECH encoding, and sensitive-field masking are OK.');
 } finally {
   child.kill('SIGTERM');
   panel.close();

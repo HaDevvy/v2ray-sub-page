@@ -2,11 +2,8 @@ const $ = (selector) => document.querySelector(selector);
 const params = new URLSearchParams(location.search);
 const key = params.get('key');
 const initialTargetHost = params.get('host') || '';
-const pathParts = location.pathname.split('/').filter(Boolean);
-const hostsIndex = pathParts.lastIndexOf('hosts');
-const appBasePath = hostsIndex > 0 ? `/${pathParts.slice(0, hostsIndex).join('/')}` : '';
-const hostsApiPath = window.__HOSTS_API_PATH__ || '/api/hosts';
-const withBase = (pathname) => `${appBasePath}${pathname.startsWith('/') ? pathname : `/${pathname}`}`;
+const hostsApiPath = window.__HOSTS_API_PATH__ || '/hosts-secret/api';
+const appBasePath = window.__APP_BASE_PATH__ || '';
 
 function normalizeHostValue(value = '') {
   return String(value).trim().toLowerCase().replace(/\.+$/, '');
@@ -17,12 +14,11 @@ function currentTargetHost() {
 }
 
 function hostsApiUrl() {
-  const query = new URLSearchParams();
+  const url = new URL(hostsApiPath, location.origin);
   const targetHost = currentTargetHost();
-  if (targetHost) query.set('host', targetHost);
-  if (key) query.set('key', key);
-  const qs = query.toString();
-  return `${withBase(hostsApiPath)}${qs ? `?${qs}` : ''}`;
+  if (targetHost) url.searchParams.set('host', targetHost);
+  if (key) url.searchParams.set('key', key);
+  return `${url.pathname}${url.search}`;
 }
 
 function syncPageUrl(targetHost) {
@@ -104,7 +100,7 @@ async function saveHosts(event) {
   }
 }
 
-$('#homeLink').href = `${appBasePath || '.'}/${key ? `?key=${encodeURIComponent(key)}` : ''}`;
+$('#homeLink').href = `${appBasePath || '/'}${key ? `?key=${encodeURIComponent(key)}` : ''}`;
 $('#targetHost').value = initialTargetHost;
 $('#hostsForm').addEventListener('submit', saveHosts);
 $('#reloadHosts').addEventListener('click', loadHosts);

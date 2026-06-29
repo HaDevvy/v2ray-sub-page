@@ -11,7 +11,6 @@ const compat = String(params.get('compat') || '').trim().toLowerCase();
 const isV2BoxMode = ['v2box', 'v2-box', 'v2_box'].includes(compat);
 
 const withBase = (pathname) => `${appBasePath}${pathname.startsWith('/') ? pathname : `/${pathname}`}`;
-const hostsPageLink = document.querySelector('#hostsPageLink');
 
 function queryString(extra = {}) {
   const query = new URLSearchParams();
@@ -27,7 +26,6 @@ function absolutePortalUrl(pathname, extra = {}) {
   return `${location.origin}${withBase(pathname)}${queryString(extra)}`;
 }
 
-if (hostsPageLink) hostsPageLink.href = `${withBase('/hosts')}${queryString()}`;
 
 const formatBytes = (bytes = 0) => {
   const value = Number(bytes || 0);
