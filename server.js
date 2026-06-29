@@ -637,7 +637,7 @@ async function sendHostsPage(req, res) {
     '</script>'
   ].join('\n');
 
-  res.type('html; charset=utf-8');
+  res.set('Content-Type', 'text/html; charset=utf-8');
   res.set('Cache-Control', 'no-store');
   res.send(template.replace('<head>', `<head>\n  ${boot.replace(/\n/g, '\n  ')}`));
 }

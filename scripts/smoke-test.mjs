@@ -178,6 +178,9 @@ try {
   if (hostsPage.status !== 200 || !hostsPage.text.includes('مدیریت هاست‌های جایگزین برای هر host اصلی')) {
     throw new Error(`hosts page failed: ${hostsPage.status}`);
   }
+  if (!hostsPage.headers.get('content-type')?.includes('text/html')) {
+    throw new Error(`hosts page must be served as HTML, got ${hostsPage.headers.get('content-type')}`);
+  }
   if (!hostsPage.text.includes('/secret-test/host-secret-test/api')) {
     throw new Error(`hosts page did not expose the derived hosts API path: ${hostsPage.text}`);
   }
