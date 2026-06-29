@@ -90,6 +90,9 @@ async function init() {
     $('#subscriptionUrl').value = data.subscriptionUrl;
     $('#openSub').href = data.subscriptionUrl;
     $('#openRawSub').href = data.rawSubscriptionUrl;
+    $('#v2boxSubscriptionUrl').value = data.v2boxSubscriptionUrl;
+    $('#openV2boxSub').href = data.v2boxSubscriptionUrl;
+    $('#openRawV2boxSub').href = data.rawV2boxSubscriptionUrl;
     $('#subQr').src = withBase(`/qr?text=${encodeURIComponent(data.subscriptionUrl)}${key ? `&key=${encodeURIComponent(key)}` : ''}`);
     $('#copyAll').addEventListener('click', () => copyText(data.links.map((item) => item.url).join('\n')));
 

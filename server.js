@@ -416,6 +416,53 @@ function normalizeExistingEchInVlessLink(link) {
   return addEchToVlessLink(rawLink, existingEch);
 }
 
+function encodeEchForV2Box(value = '') {
+  const decoded = safeDecodeQueryComponent(value);
+  return encodeURIComponent(decoded).replace(/%2B/gi, '%252B');
+}
+
+function makeV2BoxCompatibleVlessLink(link) {
+  const rawLink = String(link || '');
+  if (protocolOf(rawLink) !== 'vless') return rawLink;
+
+  const { base, query, hash } = splitLinkParts(rawLink);
+  const nextQuery = queryParts(query).map((part) => {
+    if (queryPartKey(part) !== 'ech') return part;
+
+    const eqIndex = part.indexOf('=');
+    if (eqIndex < 0) return part;
+
+    const key = part.slice(0, eqIndex);
+    const value = part.slice(eqIndex + 1);
+    return `${key}=${encodeEchForV2Box(value)}`;
+  }).join('&');
+
+  return `${base}${nextQuery ? `?${nextQuery}` : ''}${hash}`;
+}
+
+function makeV2BoxCompatibleLinks(links = []) {
+  return links.map((item) => ({
+    ...item,
+    url: makeV2BoxCompatibleVlessLink(item.url)
+  }));
+}
+
+const subscriptionCompatAliases = new Map([
+  ['v2box', 'v2box'],
+  ['v2-box', 'v2box'],
+  ['v2_box', 'v2box']
+]);
+
+function normalizeSubscriptionCompat(value) {
+  const key = String(value ?? '').trim().toLowerCase();
+  return subscriptionCompatAliases.get(key) || '';
+}
+
+function linksForSubscriptionCompat(links = [], compat = '') {
+  if (compat === 'v2box') return makeV2BoxCompatibleLinks(links);
+  return links;
+}
+
 function vlessSni(link) {
   const rawLink = String(link || '');
   if (protocolOf(rawLink) !== 'vless') return '';
@@ -614,6 +661,8 @@ async function loadUser(email) {
   const key = ACCESS_KEY || undefined;
   const subscriptionUrl = publicUrl(`/sub/${publicEmail}`, { key });
   const rawSubscriptionUrl = publicUrl(`/sub/${publicEmail}`, { format: 'raw', key });
+  const v2boxSubscriptionUrl = publicUrl(`/sub/${publicEmail}`, { compat: 'v2box', key });
+  const rawV2boxSubscriptionUrl = publicUrl(`/sub/${publicEmail}`, { compat: 'v2box', format: 'raw', key });
 
   return {
     client: sanitizeClient(client),
@@ -622,6 +671,8 @@ async function loadUser(email) {
     links,
     subscriptionUrl,
     rawSubscriptionUrl,
+    v2boxSubscriptionUrl,
+    rawV2boxSubscriptionUrl,
     secretPath: SECRET_PATH,
     updatedAt: new Date().toISOString()
   };
@@ -723,9 +774,11 @@ router.get('/sub/:email', requireAccessKey, async (req, res) => {
   try {
     const data = await loadUser(req.params.email);
     const format = req.query.format === 'raw' ? 'raw' : 'base64';
+    const compat = normalizeSubscriptionCompat(req.query.compat ?? req.query.client ?? req.query.app ?? req.query.target);
+    const links = linksForSubscriptionCompat(data.links, compat);
     res.set('Content-Type', 'text/plain; charset=utf-8');
     res.set('Cache-Control', 'no-store');
-    res.send(toSubscriptionBody(data.links, format));
+    res.send(toSubscriptionBody(links, format));
   } catch (err) {
     console.error('[sub]', err);
     res.status(err.status || 500).type('text/plain').send(err.message || 'Unexpected error.');

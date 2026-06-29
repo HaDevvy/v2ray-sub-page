@@ -11,8 +11,9 @@
 - ساخت لینک subscription قابل import در کلاینت‌های رایج
 - خروجی Base64 برای subscription: `/sub/:email`
 - خروجی خام newline-separated: `/sub/:email?format=raw`
+- خروجی سازگار با V2Box برای ECH: `/sub/:email?compat=v2box`
 - QR Code برای subscription
-- اضافه‌کردن خودکار پارامتر `ech` به کانفیگ‌های `vless://` از فایل `ech-updater-data/last_ech.txt` با encode درست برای کلاینت‌هایی مثل V2Box
+- اضافه‌کردن خودکار پارامتر `ech` به کانفیگ‌های `vless://` از فایل `ech-updater-data/last_ech.txt` با encode استاندارد، و ساخت خروجی جداگانه‌ی سازگار با V2Box
 - تنظیم سیاست ECH به ازای هر `sni`: حالت `ech`، حالت `off`، یا حالت `both`
 - مدیریت هاست‌های جایگزین به‌صورت جداگانه برای هر host اصلی از صفحه‌ی `/hosts`، ذخیره در فایل‌های txt جدا، و امکان تغییر مسیر API مدیریت هاست‌ها
 - نگه‌داشتن توکن در `.env`
@@ -73,7 +74,30 @@ HOSTS_API_PATH=/api/hosts
 AEX+DQBBnQAgACAuUyG3EwlOlnDr5/s2GM04Ruokm4DKWz+ouys2fCitRwAEAAEAAQASY2xvdWRmbGFyZS1lY2guY29tAAA=
 ```
 
-در خروجی لینک، این مقدار بدون استفاده از parser خراب‌کننده‌ی `+`، خودکار URL-encode می‌شود؛ یعنی `+` به `%2B`، `/` به `%2F` و `=` به `%3D` تبدیل می‌شود. این کار باعث می‌شود کلاینت‌هایی مثل V2Box مقدار ECH را به‌جای فاصله، درست به‌عنوان Base64 بخوانند. اگر فایل تغییر کند، نیاز به restart نیست؛ برنامه در هر درخواست `/api/user/:email` و `/sub/:email` دوباره فایل را می‌خواند.
+در خروجی معمولی، این مقدار بدون استفاده از parser خراب‌کننده‌ی `+`، خودکار URL-encode می‌شود؛ یعنی `+` به `%2B`، `/` به `%2F` و `=` به `%3D` تبدیل می‌شود. اگر فایل تغییر کند، نیاز به restart نیست؛ برنامه در هر درخواست `/api/user/:email` و `/sub/:email` دوباره فایل را می‌خواند.
+
+### خروجی جداگانه برای V2Box
+
+بعضی نسخه‌های V2Box مقدار `ech` را دوبار decode/parse می‌کنند و در نتیجه `+` را به فاصله تبدیل می‌کنند. برای همین یک خروجی جدا اضافه شده است که فقط داخل مقدار `ech`، علامت `+` را به‌صورت double-encoded می‌فرستد:
+
+```text
++      => %2B      در خروجی معمولی
++      => %252B    در خروجی V2Box
+```
+
+لینک اشتراک سازگار با V2Box:
+
+```text
+http://localhost:3000/sub/USER_EMAIL_OR_ID?compat=v2box
+```
+
+خروجی خام سازگار با V2Box:
+
+```text
+http://localhost:3000/sub/USER_EMAIL_OR_ID?format=raw&compat=v2box
+```
+
+این تغییر فقط روی پارامتر `ech` لینک‌های `vless://` اعمال می‌شود. خروجی معمولی همچنان `%2B` می‌سازد تا کلاینت‌هایی مثل v2rayNG، v2rayN و بقیه کلاینت‌های درست خراب نشوند.
 
 ### تنظیم ECH به ازای هر SNI
 
@@ -278,6 +302,7 @@ https://sub.example.com/my-secret-path/
 https://sub.example.com/my-secret-path/u/USER_EMAIL_OR_ID
 https://sub.example.com/my-secret-path/sub/USER_EMAIL_OR_ID
 https://sub.example.com/my-secret-path/sub/USER_EMAIL_OR_ID?format=raw
+https://sub.example.com/my-secret-path/sub/USER_EMAIL_OR_ID?compat=v2box
 ```
 
 آدرس‌های بدون secret path، مثل این‌ها، دیگر صفحه اصلی یا API را نشان نمی‌دهند:
@@ -286,6 +311,7 @@ https://sub.example.com/my-secret-path/sub/USER_EMAIL_OR_ID?format=raw
 https://sub.example.com/
 https://sub.example.com/u/USER_EMAIL_OR_ID
 https://sub.example.com/sub/USER_EMAIL_OR_ID
+https://sub.example.com/sub/USER_EMAIL_OR_ID?compat=v2box
 ```
 
 نکته: `/healthz` عمومی می‌ماند تا Docker healthcheck و reverse proxy بتوانند سرویس را چک کنند. این endpoint داده‌ی حساسی برنمی‌گرداند.
@@ -366,6 +392,7 @@ http://localhost:3000/my-secret-path/sub/EMAIL
 ```text
 http://localhost:3000/my-secret-path/u/EMAIL?key=ACCESS_KEY
 http://localhost:3000/my-secret-path/sub/EMAIL?key=ACCESS_KEY
+http://localhost:3000/my-secret-path/sub/EMAIL?compat=v2box&key=ACCESS_KEY
 ```
 
 ## Dockerfile

@@ -186,6 +186,9 @@ try {
   if (api.status !== 200) throw new Error(`api failed: ${api.status} ${api.text}`);
   const apiJson = JSON.parse(api.text);
   if (!apiJson.success || apiJson.obj.links.length !== 9) throw new Error(`api payload is invalid: expected 9 links, got ${apiJson.obj.links.length}`);
+  if (!apiJson.obj.v2boxSubscriptionUrl.includes('compat=v2box') || !apiJson.obj.rawV2boxSubscriptionUrl.includes('compat=v2box') || !apiJson.obj.rawV2boxSubscriptionUrl.includes('format=raw')) {
+    throw new Error(`V2Box subscription URLs are missing from API response: ${JSON.stringify(apiJson.obj)}`);
+  }
   const allUrlsFromApi = apiJson.obj.links.map((item) => item.url).join('\n');
   const vlessFromApi = apiJson.obj.links.find((item) => item.protocol === 'VLESS' && item.url.includes('@example.com:443') && item.url.includes('ech='))?.url || '';
   if (!vlessFromApi.includes('allowInsecure=0&ech=A%2BB%2FC%3D&sni=example.com&type=ws')) {
@@ -231,6 +234,19 @@ try {
     throw new Error(`subscription body should not include ECH for market.hqmq.com SNI: ${decoded}`);
   }
 
+  const v2boxSub = await request(`${base}/secret-test/sub/demo-user?compat=v2box&key=test-key`);
+  if (v2boxSub.status !== 200) throw new Error(`V2Box sub failed: ${v2boxSub.status}`);
+  const decodedV2box = Buffer.from(v2boxSub.text, 'base64').toString('utf8');
+  if (!decodedV2box.includes('ech=A%252BB%2FC%3D')) {
+    throw new Error(`V2Box subscription did not double-encode plus signs inside ECH: ${decodedV2box}`);
+  }
+  if (decodedV2box.includes('ech=A%2BB%2FC%3D')) {
+    throw new Error(`V2Box subscription still contains standard single-encoded plus signs inside ECH: ${decodedV2box}`);
+  }
+  if (!decoded.includes('ech=A%2BB%2FC%3D') || decoded.includes('ech=A%252BB%2FC%3D')) {
+    throw new Error(`Normal subscription should keep standard ECH encoding: ${decoded}`);
+  }
+
   await fs.writeFile(echFilePath, 'NEW+ECH=\n');
 
   const saveHosts = await request(`${base}/secret-test/private-hosts-api?host=example.com&key=test-key`, {
@@ -259,10 +275,18 @@ try {
     throw new Error(`raw subscription should not include ECH for off-mode market SNI: ${raw.text}`);
   }
 
+  const rawV2box = await request(`${base}/secret-test/sub/demo-user?format=raw&compat=v2box&key=test-key`);
+  if (rawV2box.status !== 200 || !rawV2box.text.includes('ech=NEW%252BECH%3D')) {
+    throw new Error(`raw V2Box subscription did not double-encode updated ECH plus signs: ${rawV2box.status} ${rawV2box.text}`);
+  }
+  if (!raw.text.includes('ech=NEW%2BECH%3D') || raw.text.includes('ech=NEW%252BECH%3D')) {
+    throw new Error(`normal raw subscription should keep standard updated ECH encoding: ${raw.text}`);
+  }
+
   const qr = await request(`${base}/secret-test/qr?text=${encodeURIComponent('hello')}&key=test-key`);
   if (qr.status !== 200 || !qr.text.includes('<svg')) throw new Error('qr failed');
 
-  console.log('Smoke test passed. Routes, secret path, custom hosts API path, access key, panel proxy, per-source-host editor, subscription expansion, QR, per-SNI ECH policy, URL-safe ECH encoding, and sensitive-field masking are OK.');
+  console.log('Smoke test passed. Routes, secret path, custom hosts API path, access key, panel proxy, per-source-host editor, subscription expansion, QR, per-SNI ECH policy, standard and V2Box-compatible ECH encoding, and sensitive-field masking are OK.');
 } finally {
   child.kill('SIGTERM');
   panel.close();
