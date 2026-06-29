@@ -129,18 +129,66 @@ button, a.button { -webkit-tap-highlight-color: transparent; }
 .brand {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
+  min-width: 0;
   font-weight: 950;
-  letter-spacing: 0.08em;
-  white-space: nowrap;
+  letter-spacing: 0.02em;
 }
-.brand::before {
-  content: "";
-  width: 12px;
-  height: 12px;
-  border-radius: 999px;
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
-  box-shadow: 0 0 24px rgba(125, 242, 204, 0.7);
+.brand-logo {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.12);
+  box-shadow: 0 12px 24px rgba(0,0,0,0.22);
+}
+.brand-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.brand-copy strong {
+  font-size: 15px;
+  line-height: 1.15;
+}
+.brand-copy small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+  letter-spacing: 0.02em;
+}
+.hero-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 10px 14px;
+  border-radius: 20px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.04);
+}
+.hero-brand-icon {
+  width: 56px;
+  height: 56px;
+  flex: 0 0 auto;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.12);
+  box-shadow: 0 14px 30px rgba(0,0,0,0.24);
+}
+.hero-brand-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.hero-brand-copy strong {
+  font-size: 18px;
+  line-height: 1.2;
+}
+.hero-brand-copy span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .card {
@@ -507,7 +555,24 @@ button.ghost:hover {
     gap: 12px;
     margin-bottom: 14px;
   }
-  .topbar-links { justify-content: space-between; }
+  .topbar-links {
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .brand {
+    width: 100%;
+  }
+  .brand-copy strong { font-size: 14px; }
+  .brand-copy small { font-size: 10px; }
+  .hero-brand {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .hero-brand-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 16px;
+  }
   .topbar .button,
   .status-pill { width: 100%; }
   .mode-tabs {
@@ -556,7 +621,27 @@ button.ghost:hover {
   .card { padding: 15px; border-radius: 19px; }
   button,
   .button { white-space: normal; text-align: center; }
-  .brand { font-size: 14px; letter-spacing: 0.04em; }
+  .brand {
+    gap: 10px;
+    font-size: 14px;
+  }
+  .brand-logo {
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
+  }
+  .hero-brand {
+    gap: 12px;
+    padding: 9px 11px;
+    border-radius: 18px;
+  }
+  .hero-brand-icon {
+    width: 46px;
+    height: 46px;
+    border-radius: 14px;
+  }
+  .hero-brand-copy strong { font-size: 16px; }
+  .hero-brand-copy span { font-size: 12px; }
   input { font-size: 14px; }
   code { font-size: 12.5px; }
 }
