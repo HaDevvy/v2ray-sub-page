@@ -17,6 +17,9 @@ const ACCESS_KEY = process.env.ACCESS_KEY || '';
 const ECH_FILE_PATH = process.env.ECH_FILE_PATH
   ? path.resolve(__dirname, process.env.ECH_FILE_PATH)
   : path.join(__dirname, 'ech-updater-data', 'last_ech.txt');
+const ECH_CONFIG_PATH = process.env.ECH_CONFIG_PATH
+  ? path.resolve(__dirname, process.env.ECH_CONFIG_PATH)
+  : path.join(__dirname, 'ech-updater-data', 'ech-config.json');
 const HOSTS_DIR_PATH = process.env.HOSTS_DIR_PATH
   ? path.resolve(__dirname, process.env.HOSTS_DIR_PATH)
   : path.join(__dirname, 'data', 'hosts');
@@ -136,6 +139,98 @@ async function readLatestEch() {
   }
 }
 
+const echModeAliases = new Map([
+  ['ech', 'ech'],
+  ['on', 'ech'],
+  ['with', 'ech'],
+  ['with-ech', 'ech'],
+  ['enable', 'ech'],
+  ['enabled', 'ech'],
+  ['true', 'ech'],
+  ['1', 'ech'],
+  ['off', 'off'],
+  ['no', 'off'],
+  ['none', 'off'],
+  ['without', 'off'],
+  ['without-ech', 'off'],
+  ['no-ech', 'off'],
+  ['disable', 'off'],
+  ['disabled', 'off'],
+  ['false', 'off'],
+  ['0', 'off'],
+  ['both', 'both'],
+  ['all', 'both'],
+  ['mixed', 'both']
+]);
+
+function normalizeEchMode(value, fallback = 'ech') {
+  const key = String(value ?? '').trim().toLowerCase();
+  return echModeAliases.get(key) || fallback;
+}
+
+function normalizeEchConfigEntry(value) {
+  if (typeof value === 'string' || typeof value === 'boolean' || typeof value === 'number') {
+    return normalizeEchMode(value, 'ech');
+  }
+
+  if (value && typeof value === 'object') {
+    return normalizeEchMode(value.mode ?? value.ech ?? value.enabled, 'ech');
+  }
+
+  return 'ech';
+}
+
+function normalizeEchConfig(payload = {}) {
+  const config = { defaultMode: 'ech', exact: new Map(), wildcard: [] };
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return config;
+
+  config.defaultMode = normalizeEchMode(payload.default ?? payload.defaultMode ?? payload.mode, 'ech');
+  const sniConfig = payload.sni && typeof payload.sni === 'object' && !Array.isArray(payload.sni)
+    ? payload.sni
+    : payload;
+
+  Object.entries(sniConfig).forEach(([rawSni, rawMode]) => {
+    if (['default', 'defaultmode', 'mode', 'sni'].includes(String(rawSni).toLowerCase())) return;
+
+    const sniKey = String(rawSni || '').trim().toLowerCase().replace(/\.+$/, '');
+    const mode = normalizeEchConfigEntry(rawMode);
+    if (!sniKey) return;
+
+    if (sniKey.startsWith('*.')) {
+      const suffix = normalizeHostValue(sniKey.slice(2));
+      if (suffix) config.wildcard.push({ suffix, mode });
+      return;
+    }
+
+    const sni = normalizeHostValue(sniKey);
+    if (sni) config.exact.set(sni, mode);
+  });
+
+  return config;
+}
+
+async function readEchConfig() {
+  try {
+    const content = await fs.readFile(ECH_CONFIG_PATH, 'utf8');
+    return normalizeEchConfig(JSON.parse(content));
+  } catch (err) {
+    if (err?.code !== 'ENOENT') {
+      console.warn(`[ech-config] Cannot read/parse ${ECH_CONFIG_PATH}: ${err.message}. Falling back to default mode: ech`);
+    }
+    return normalizeEchConfig();
+  }
+}
+
+function echModeForSni(config, sniValue) {
+  const sni = normalizeHostValue(sniValue);
+  if (!sni) return config.defaultMode;
+
+  if (config.exact.has(sni)) return config.exact.get(sni);
+
+  const wildcardMatch = config.wildcard.find(({ suffix }) => sni === suffix || sni.endsWith(`.${suffix}`));
+  return wildcardMatch?.mode || config.defaultMode;
+}
+
 
 function normalizeHostValue(value = '') {
   const host = String(value).trim().toLowerCase().replace(/\.+$/, '');
@@ -225,28 +320,8 @@ async function writeHostsTextForHost(targetHostValue, text) {
 }
 
 
-function setQueryParamPreservingOrder(query, key, value, insertAfterKeys = []) {
-  const params = new URLSearchParams(query || '');
-  params.delete(key);
-
-  const entries = Array.from(params.entries());
-  const insertAfterIndex = entries.reduce((lastMatch, [entryKey], index) => (
-    insertAfterKeys.includes(entryKey) ? index : lastMatch
-  ), -1);
-
-  const nextEntries = [...entries];
-  nextEntries.splice(insertAfterIndex + 1, 0, [key, value]);
-
-  const nextParams = new URLSearchParams();
-  nextEntries.forEach(([entryKey, entryValue]) => nextParams.append(entryKey, entryValue));
-  return nextParams.toString();
-}
-
-function addEchToVlessLink(link, echValue) {
+function splitLinkParts(link) {
   const rawLink = String(link || '');
-  const ech = String(echValue || '').trim();
-  if (!ech || protocolOf(rawLink) !== 'vless') return rawLink;
-
   const hashIndex = rawLink.indexOf('#');
   const beforeHash = hashIndex >= 0 ? rawLink.slice(0, hashIndex) : rawLink;
   const hash = hashIndex >= 0 ? rawLink.slice(hashIndex) : '';
@@ -255,8 +330,135 @@ function addEchToVlessLink(link, echValue) {
   const base = queryIndex >= 0 ? beforeHash.slice(0, queryIndex) : beforeHash;
   const query = queryIndex >= 0 ? beforeHash.slice(queryIndex + 1) : '';
 
+  return { base, query, hash };
+}
+
+function safeDecodeQueryComponent(value = '') {
+  try {
+    // Do not convert + to a space. VLESS ECH values are base64 and raw + is meaningful.
+    return decodeURIComponent(String(value).replace(/%(?![0-9A-Fa-f]{2})/g, '%25'));
+  } catch {
+    return String(value);
+  }
+}
+
+function queryPartKey(part = '') {
+  const eqIndex = String(part).indexOf('=');
+  const key = eqIndex >= 0 ? String(part).slice(0, eqIndex) : String(part);
+  return safeDecodeQueryComponent(key).trim().toLowerCase();
+}
+
+function queryPartValue(part = '') {
+  const eqIndex = String(part).indexOf('=');
+  return eqIndex >= 0 ? String(part).slice(eqIndex + 1) : '';
+}
+
+function queryParts(query = '') {
+  return String(query || '').split('&').filter((part) => part !== '');
+}
+
+function removeQueryParamsPreservingOrder(query, keys = []) {
+  const keySet = new Set(keys.map((item) => String(item).toLowerCase()));
+  return queryParts(query).filter((part) => !keySet.has(queryPartKey(part))).join('&');
+}
+
+function setQueryParamPreservingOrder(query, key, value, insertAfterKeys = []) {
+  const keyLower = String(key).toLowerCase();
+  const insertAfterSet = new Set(insertAfterKeys.map((item) => String(item).toLowerCase()));
+  const parts = queryParts(query).filter((part) => queryPartKey(part) !== keyLower);
+
+  const insertAfterIndex = parts.reduce((lastMatch, part, index) => (
+    insertAfterSet.has(queryPartKey(part)) ? index : lastMatch
+  ), -1);
+
+  const nextParts = [...parts];
+  nextParts.splice(insertAfterIndex + 1, 0, `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`);
+  return nextParts.join('&');
+}
+
+function getQueryParamValue(query, keys = []) {
+  const keySet = new Set(keys.map((item) => String(item).toLowerCase()));
+  const foundPart = queryParts(query).find((part) => keySet.has(queryPartKey(part)));
+  if (!foundPart) return '';
+  return safeDecodeQueryComponent(queryPartValue(foundPart)).trim();
+}
+
+function getExistingEchValue(link) {
+  const rawLink = String(link || '');
+  if (protocolOf(rawLink) !== 'vless') return '';
+  const { query } = splitLinkParts(rawLink);
+  return getQueryParamValue(query, ['ech']);
+}
+
+function addEchToVlessLink(link, echValue) {
+  const rawLink = String(link || '');
+  const ech = String(echValue || '').trim();
+  if (!ech || protocolOf(rawLink) !== 'vless') return normalizeExistingEchInVlessLink(rawLink);
+
+  const { base, query, hash } = splitLinkParts(rawLink);
   const nextQuery = setQueryParamPreservingOrder(query, 'ech', ech, ['allowInsecure', 'insecure']);
   return `${base}${nextQuery ? `?${nextQuery}` : ''}${hash}`;
+}
+
+function removeEchFromVlessLink(link) {
+  const rawLink = String(link || '');
+  if (protocolOf(rawLink) !== 'vless') return rawLink;
+
+  const { base, query, hash } = splitLinkParts(rawLink);
+  const nextQuery = removeQueryParamsPreservingOrder(query, ['ech']);
+  return `${base}${nextQuery ? `?${nextQuery}` : ''}${hash}`;
+}
+
+function normalizeExistingEchInVlessLink(link) {
+  const rawLink = String(link || '');
+  const existingEch = getExistingEchValue(rawLink);
+  if (!existingEch) return rawLink;
+  return addEchToVlessLink(rawLink, existingEch);
+}
+
+function vlessSni(link) {
+  const rawLink = String(link || '');
+  if (protocolOf(rawLink) !== 'vless') return '';
+
+  const { query } = splitLinkParts(rawLink);
+  return normalizeHostValue(getQueryParamValue(query, ['sni', 'servername', 'serverName'])) || vlessAuthorityHost(rawLink);
+}
+
+function withLinkNameSuffix(link, suffix) {
+  const rawLink = String(link || '');
+  const cleanSuffix = String(suffix || '').trim();
+  if (!cleanSuffix) return rawLink;
+
+  const { base, query, hash } = splitLinkParts(rawLink);
+  const currentName = hash ? safeDecodeQueryComponent(hash.slice(1)).trim() : '';
+  if (currentName.includes(cleanSuffix)) return rawLink;
+
+  const nextName = currentName ? `${currentName} ${cleanSuffix}` : cleanSuffix;
+  return `${base}${query ? `?${query}` : ''}#${encodeURIComponent(nextName)}`;
+}
+
+function uniqueLinks(links = []) {
+  const seen = new Set();
+  return links.filter((link) => {
+    if (seen.has(link)) return false;
+    seen.add(link);
+    return true;
+  });
+}
+
+function applyEchPolicyToVlessLink(link, latestEch, echConfig) {
+  const rawLink = String(link || '');
+  if (protocolOf(rawLink) !== 'vless') return [rawLink];
+
+  const mode = echModeForSni(echConfig, vlessSni(rawLink));
+  const withEch = addEchToVlessLink(rawLink, latestEch || getExistingEchValue(rawLink));
+  const withoutEch = removeEchFromVlessLink(rawLink);
+
+  if (mode === 'off') return [withoutEch];
+  if (mode === 'both') {
+    return uniqueLinks([withLinkNameSuffix(withEch, 'ECH'), withLinkNameSuffix(withoutEch, 'No ECH')]);
+  }
+  return [withEch];
 }
 
 
@@ -388,14 +590,17 @@ async function loadUser(email) {
   }
 
   const subPayload = await panelGet(`/panel/api/clients/subLinks/${encodeURIComponent(client.subId)}`);
-  const latestEch = await readLatestEch();
+  const [latestEch, echConfig] = await Promise.all([readLatestEch(), readEchConfig()]);
   const rawLinks = Array.isArray(subPayload?.obj) ? subPayload.obj.filter(Boolean) : [];
   const sourceHostCache = new Map();
   const expandedUrlGroups = await Promise.all(rawLinks.map(async (rawUrl) => {
-    const url = addEchToVlessLink(rawUrl, latestEch);
-    const sourceHost = vlessAuthorityHost(url);
-    const customHosts = await readCustomHostsForSourceHost(sourceHost, sourceHostCache);
-    return expandVlessLinkByHosts(url, customHosts);
+    const echPolicyUrls = applyEchPolicyToVlessLink(rawUrl, latestEch, echConfig);
+    const expandedGroups = await Promise.all(echPolicyUrls.map(async (url) => {
+      const sourceHost = vlessAuthorityHost(url);
+      const customHosts = await readCustomHostsForSourceHost(sourceHost, sourceHostCache);
+      return expandVlessLinkByHosts(url, customHosts);
+    }));
+    return expandedGroups.flat();
   }));
   const expandedUrls = expandedUrlGroups.flat();
   const links = expandedUrls.map((url, index) => ({
@@ -557,4 +762,5 @@ app.listen(PORT, () => {
   console.log(`Subscription portal is running on http://localhost:${PORT}`);
   console.log(`Public root: ${publicRoot}`);
   console.log(`Hosts API path: ${SECRET_PATH || ''}${HOSTS_API_PATH}`);
+  console.log(`ECH config path: ${ECH_CONFIG_PATH}`);
 });

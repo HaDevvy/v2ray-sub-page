@@ -12,7 +12,8 @@
 - خروجی Base64 برای subscription: `/sub/:email`
 - خروجی خام newline-separated: `/sub/:email?format=raw`
 - QR Code برای subscription
-- اضافه‌کردن خودکار پارامتر `ech` به کانفیگ‌های `vless://` از فایل `ech-updater-data/last_ech.txt`
+- اضافه‌کردن خودکار پارامتر `ech` به کانفیگ‌های `vless://` از فایل `ech-updater-data/last_ech.txt` با encode درست برای کلاینت‌هایی مثل V2Box
+- تنظیم سیاست ECH به ازای هر `sni`: حالت `ech`، حالت `off`، یا حالت `both`
 - مدیریت هاست‌های جایگزین به‌صورت جداگانه برای هر host اصلی از صفحه‌ی `/hosts`، ذخیره در فایل‌های txt جدا، و امکان تغییر مسیر API مدیریت هاست‌ها
 - نگه‌داشتن توکن در `.env`
 - گزینه‌ی `SECRET_PATH` برای قرار دادن کل پروژه پشت مسیر مخفی
@@ -56,6 +57,7 @@ PORT=3000
 SECRET_PATH=
 ACCESS_KEY=
 ECH_FILE_PATH=./ech-updater-data/last_ech.txt
+ECH_CONFIG_PATH=./ech-updater-data/ech-config.json
 HOSTS_DIR_PATH=./data/hosts
 HOSTS_API_PATH=/api/hosts
 ```
@@ -65,15 +67,50 @@ HOSTS_API_PATH=/api/hosts
 
 ## ECH برای VLESS
 
-برنامه قبل از ساخت خروجی، مقدار ECH را از فایل `ech-updater-data/last_ech.txt` می‌خواند و به همه‌ی لینک‌های `vless://` به صورت پارامتر `ech` اضافه می‌کند. مقدار داخل فایل باید خام باشد، مثلا:
+برنامه قبل از ساخت خروجی، مقدار ECH را از فایل `ech-updater-data/last_ech.txt` می‌خواند. مقدار داخل فایل باید خام باشد، مثلا:
 
 ```text
 AEX+DQBBnQAgACAuUyG3EwlOlnDr5/s2GM04Ruokm4DKWz+ouys2fCitRwAEAAEAAQASY2xvdWRmbGFyZS1lY2guY29tAAA=
 ```
 
-در خروجی لینک، این مقدار خودکار URL-encode می‌شود؛ یعنی `+` به `%2B`، `/` به `%2F` و `=` به `%3D` تبدیل می‌شود. اگر فایل تغییر کند، نیاز به restart نیست؛ برنامه در هر درخواست `/api/user/:email` و `/sub/:email` دوباره فایل را می‌خواند.
+در خروجی لینک، این مقدار بدون استفاده از parser خراب‌کننده‌ی `+`، خودکار URL-encode می‌شود؛ یعنی `+` به `%2B`، `/` به `%2F` و `=` به `%3D` تبدیل می‌شود. این کار باعث می‌شود کلاینت‌هایی مثل V2Box مقدار ECH را به‌جای فاصله، درست به‌عنوان Base64 بخوانند. اگر فایل تغییر کند، نیاز به restart نیست؛ برنامه در هر درخواست `/api/user/:email` و `/sub/:email` دوباره فایل را می‌خواند.
 
-نکته‌ی پیشنهادی برای Docker: فقط فولدر داده‌ی ECH را mount کن، نه کل `/app` را. این یعنی کد برنامه و `node_modules` داخل image می‌مانند و فقط فایل متغیر ECH از host خوانده می‌شود:
+### تنظیم ECH به ازای هر SNI
+
+فایل پیش‌فرض تنظیم سیاست ECH این است:
+
+```text
+ech-updater-data/ech-config.json
+```
+
+نمونه:
+
+```json
+{
+  "default": "ech",
+  "sni": {
+    "example.com": "both",
+    "no-ech.example.com": "off",
+    "*.ech.example.com": "ech"
+  }
+}
+```
+
+حالت‌ها:
+
+```text
+ech   => کانفیگ با ECH ساخته می‌شود
+off   => کانفیگ بدون ECH ساخته می‌شود و اگر ech از قبل داخل لینک باشد حذف می‌شود
+both  => یک نسخه با ECH و یک نسخه بدون ECH ساخته می‌شود
+```
+
+اگر داخل لینک `vless://` پارامتر `sni` وجود داشته باشد، همین مقدار برای انتخاب سیاست استفاده می‌شود. اگر `sni` وجود نداشته باشد، host اصلی لینک یعنی بخش `uuid@host:port` به‌عنوان fallback استفاده می‌شود. مقدار `default` برای SNIهایی استفاده می‌شود که داخل فایل config نیامده‌اند. مسیر config را هم می‌توانی از `.env` تغییر بدهی:
+
+```env
+ECH_CONFIG_PATH=/path/to/ech-config.json
+```
+
+نکته‌ی پیشنهادی برای Docker: فقط فولدر داده‌ی ECH/config را mount کن، نه کل `/app` را. این یعنی کد برنامه و `node_modules` داخل image می‌مانند و فقط فایل‌های متغیر ECH و سیاست SNI از host خوانده می‌شوند:
 
 ```yaml
 volumes:
@@ -86,6 +123,16 @@ volumes:
 mkdir -p /root/dev/Market/ech-updater-data
 cat > /root/dev/Market/ech-updater-data/last_ech.txt <<'EOF'
 AEX+DQBBnQAgACAuUyG3EwlOlnDr5/s2GM04Ruokm4DKWz+ouys2fCitRwAEAAEAAQASY2xvdWRmbGFyZS1lY2guY29tAAA=
+EOF
+
+cat > /root/dev/Market/ech-updater-data/ech-config.json <<'EOF'
+{
+  "default": "ech",
+  "sni": {
+    "example.com": "both",
+    "no-ech.example.com": "off"
+  }
+}
 EOF
 ```
 
@@ -285,6 +332,7 @@ PORT=3000
 SECRET_PATH=my-secret-path
 ACCESS_KEY=یک-کلید-اختیاری-ولی-پیشنهادی
 ECH_FILE_PATH=./ech-updater-data/last_ech.txt
+ECH_CONFIG_PATH=./ech-updater-data/ech-config.json
 HOSTS_DIR_PATH=./data/hosts
 HOSTS_API_PATH=/api/hosts
 ```
@@ -447,7 +495,7 @@ docker compose build --no-cache --pull
 docker compose up -d
 ```
 
-در `docker-compose.yml` هیچ volumeای مثل `.:/app` یا `/root/dev/Market:/app` نباید باشد؛ چون باعث می‌شود `server.js` و `node_modules` نصب‌شده داخل image مخفی شوند. فقط فولدر ECH را روی `/app/ech-updater-data` mount کن.
+در `docker-compose.yml` هیچ volumeای مثل `.:/app` یا `/root/dev/Market:/app` نباید باشد؛ چون باعث می‌شود `server.js` و `node_modules` نصب‌شده داخل image مخفی شوند. فقط فولدر ECH/config را روی `/app/ech-updater-data` mount کن.
 
 Dockerfile از registry عمومی npm استفاده می‌کند:
 
