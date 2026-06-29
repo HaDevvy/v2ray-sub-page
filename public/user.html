@@ -18,7 +18,7 @@
 
     <section class="card hero compact">
       <div>
-        <div class="badge">User Subscription</div>
+        <div id="modeBadge" class="badge">User Subscription</div>
         <h1 id="title">جزئیات اشتراک کاربر</h1>
         <p id="summary">اطلاعات سرویس از سرور دریافت می‌شود. چند لحظه صبر کنید.</p>
       </div>
@@ -40,7 +40,7 @@
           <a id="openSub" class="button ghost" target="_blank" rel="noreferrer">نمایش خروجی اشتراک</a>
           <a id="openRawSub" class="button ghost" target="_blank" rel="noreferrer">نمایش خروجی خام</a>
         </div>
-        <p class="muted">اگر کلاینت V2Box مقدار ECH را با فاصله می‌خواند، از لینک سازگار با V2Box استفاده کن.</p>
+        <p id="v2boxNotice" class="muted">اگر کلاینت V2Box مقدار ECH را با فاصله می‌خواند، از لینک سازگار با V2Box استفاده کن.</p>
         <div class="copy-row">
           <input id="v2boxSubscriptionUrl" readonly />
           <button data-copy="#v2boxSubscriptionUrl">کپی لینک V2Box</button>
@@ -48,6 +48,8 @@
         <div class="button-row">
           <a id="openV2boxSub" class="button ghost" target="_blank" rel="noreferrer">نمایش خروجی V2Box</a>
           <a id="openRawV2boxSub" class="button ghost" target="_blank" rel="noreferrer">نمایش خام V2Box</a>
+          <a id="openV2boxPage" class="button ghost" rel="noreferrer">صفحه مخصوص V2Box</a>
+          <a id="openNormalPage" class="button ghost" rel="noreferrer">صفحه معمولی</a>
         </div>
       </div>
       <div class="card action-card">
@@ -59,7 +61,7 @@
 
     <section id="configsCard" class="card hidden">
       <div class="section-head">
-        <h2>کانفیگ‌های فعال</h2>
+        <h2 id="configsTitle">کانفیگ‌های فعال</h2>
         <span id="configCount" class="muted"></span>
       </div>
       <div id="configs" class="configs"></div>

@@ -150,6 +150,11 @@ try {
     throw new Error(`user page failed: ${page.status}`);
   }
 
+  const v2boxPage = await request(`${base}/secret-test/v2box/demo-user?key=test-key`);
+  if (v2boxPage.status !== 200 || !v2boxPage.text.includes('صفحه مخصوص V2Box')) {
+    throw new Error(`V2Box user page failed: ${v2boxPage.status}`);
+  }
+
   const hostsPage = await request(`${base}/secret-test/hosts?host=example.com&key=test-key`);
   if (hostsPage.status !== 200 || !hostsPage.text.includes('مدیریت هاست‌های جایگزین برای هر host اصلی')) {
     throw new Error(`hosts page failed: ${hostsPage.status}`);
@@ -189,6 +194,9 @@ try {
   if (!apiJson.obj.v2boxSubscriptionUrl.includes('compat=v2box') || !apiJson.obj.rawV2boxSubscriptionUrl.includes('compat=v2box') || !apiJson.obj.rawV2boxSubscriptionUrl.includes('format=raw')) {
     throw new Error(`V2Box subscription URLs are missing from API response: ${JSON.stringify(apiJson.obj)}`);
   }
+  if (!apiJson.obj.v2boxUserPageUrl.includes('/v2box/demo-user') || !apiJson.obj.userPageUrl.includes('/u/demo-user')) {
+    throw new Error(`V2Box/user page URLs are missing from API response: ${JSON.stringify(apiJson.obj)}`);
+  }
   const allUrlsFromApi = apiJson.obj.links.map((item) => item.url).join('\n');
   const vlessFromApi = apiJson.obj.links.find((item) => item.protocol === 'VLESS' && item.url.includes('@example.com:443') && item.url.includes('ech='))?.url || '';
   if (!vlessFromApi.includes('allowInsecure=0&ech=A%2BB%2FC%3D&sni=example.com&type=ws')) {
@@ -209,6 +217,17 @@ try {
   }
   if (expandedHosts.includes('vless://mock-config-market@alt1.example.com:443')) {
     throw new Error(`VLESS host expansion leaked between source hosts: ${expandedHosts}`);
+  }
+
+  const apiV2box = await request(`${base}/secret-test/api/user/demo-user?compat=v2box&key=test-key`);
+  if (apiV2box.status !== 200) throw new Error(`api V2Box failed: ${apiV2box.status} ${apiV2box.text}`);
+  const apiV2boxJson = JSON.parse(apiV2box.text);
+  if (!apiV2boxJson.success || apiV2boxJson.obj.compat !== 'v2box' || !apiV2boxJson.obj.isV2Box) {
+    throw new Error(`api V2Box payload did not mark v2box mode: ${apiV2box.text}`);
+  }
+  const allV2boxUrlsFromApi = apiV2boxJson.obj.links.map((item) => item.url).join('\n');
+  if (!allV2boxUrlsFromApi.includes('ech=A%252BB%2FC%3D') || allV2boxUrlsFromApi.includes('ech=A%2BB%2FC%3D')) {
+    throw new Error(`api V2Box links are not V2Box-compatible: ${allV2boxUrlsFromApi}`);
   }
 
   const serializedClient = JSON.stringify(apiJson.obj.client);

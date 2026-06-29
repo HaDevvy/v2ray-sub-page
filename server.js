@@ -624,7 +624,8 @@ async function panelGet(pathname) {
   return json;
 }
 
-async function loadUser(email) {
+async function loadUser(email, options = {}) {
+  const compat = normalizeSubscriptionCompat(options.compat);
   const safeEmail = encodeURIComponent(email);
   const clientPayload = await panelGet(`/panel/api/clients/get/${safeEmail}`);
   const obj = normalizeClientResponse(clientPayload);
@@ -650,11 +651,17 @@ async function loadUser(email) {
     return expandedGroups.flat();
   }));
   const expandedUrls = expandedUrlGroups.flat();
-  const links = expandedUrls.map((url, index) => ({
+  const normalLinks = expandedUrls.map((url, index) => ({
     index: index + 1,
     name: nameOf(url, index),
     protocol: protocolLabels[protocolOf(url)] || protocolOf(url).toUpperCase(),
     url
+  }));
+  const links = linksForSubscriptionCompat(normalLinks, compat).map((item, index) => ({
+    ...item,
+    index: index + 1,
+    name: nameOf(item.url, index),
+    protocol: protocolLabels[protocolOf(item.url)] || protocolOf(item.url).toUpperCase()
   }));
 
   const publicEmail = encodeURIComponent(email);
@@ -663,16 +670,22 @@ async function loadUser(email) {
   const rawSubscriptionUrl = publicUrl(`/sub/${publicEmail}`, { format: 'raw', key });
   const v2boxSubscriptionUrl = publicUrl(`/sub/${publicEmail}`, { compat: 'v2box', key });
   const rawV2boxSubscriptionUrl = publicUrl(`/sub/${publicEmail}`, { compat: 'v2box', format: 'raw', key });
+  const userPageUrl = publicUrl(`/u/${publicEmail}`, { key });
+  const v2boxUserPageUrl = publicUrl(`/v2box/${publicEmail}`, { key });
 
   return {
     client: sanitizeClient(client),
     inboundIds: obj.inboundIds || [],
     usedTraffic: obj.usedTraffic || 0,
     links,
+    compat,
+    isV2Box: compat === 'v2box',
     subscriptionUrl,
     rawSubscriptionUrl,
     v2boxSubscriptionUrl,
     rawV2boxSubscriptionUrl,
+    userPageUrl,
+    v2boxUserPageUrl,
     secretPath: SECRET_PATH,
     updatedAt: new Date().toISOString()
   };
@@ -725,7 +738,7 @@ router.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-router.get('/u/:email', (req, res) => {
+router.get(['/u/:email', '/v2box/:email'], (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'user.html'));
 });
 
@@ -761,7 +774,8 @@ router.post(HOSTS_API_PATH, requireAccessKey, async (req, res) => {
 
 router.get('/api/user/:email', requireAccessKey, async (req, res) => {
   try {
-    const data = await loadUser(req.params.email);
+    const compat = normalizeSubscriptionCompat(req.query.compat ?? req.query.client ?? req.query.app ?? req.query.target);
+    const data = await loadUser(req.params.email, { compat });
     res.set('Cache-Control', 'no-store');
     res.json({ success: true, obj: data });
   } catch (err) {

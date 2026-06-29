@@ -94,7 +94,7 @@ code {
   border: 1px solid var(--line);
 }
 .lookup-form { display: grid; gap: 10px; margin-top: 14px; }
-.input-row, .copy-row, .button-row { display: flex; gap: 10px; align-items: center; }
+.input-row, .copy-row, .button-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 input {
   width: 100%;
   border: 1px solid var(--line);
