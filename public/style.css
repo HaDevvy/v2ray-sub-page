@@ -130,6 +130,19 @@ button, .button {
   margin-bottom: 18px;
 }
 .action-card { display: flex; flex-direction: column; gap: 14px; }
+
+.page-switch {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+.page-switch .button.active {
+  color: #07110e;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  border-color: transparent;
+}
+
 .qr-box {
   width: 166px;
   text-align: center;

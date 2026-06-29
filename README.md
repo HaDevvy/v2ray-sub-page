@@ -8,7 +8,7 @@
 - دریافت لینک‌های کانفیگ از endpoint پنل: `/panel/api/clients/subLinks/{subId}`
 - نمایش صفحه‌ی زیبا، سبک، RTL و responsive
 - نمایش لینک‌های کانفیگ و جزئیات کاربر
-- صفحه‌ی جدا برای کاربرهای V2Box: `/v2box/:email` یا `/u/:email?compat=v2box`
+- صفحه‌ی سازگار با V2Box روی همان مسیر کاربر: `/u/:email?compat=v2box`
 - ساخت لینک subscription قابل import در کلاینت‌های رایج
 - خروجی Base64 برای subscription: `/sub/:email`
 - خروجی خام newline-separated: `/sub/:email?format=raw`
@@ -47,8 +47,6 @@ http://localhost:3000/u/USER_EMAIL_OR_ID
 صفحه مستقیم مخصوص V2Box:
 
 ```text
-http://localhost:3000/v2box/USER_EMAIL_OR_ID
-# یا
 http://localhost:3000/u/USER_EMAIL_OR_ID?compat=v2box
 ```
 
@@ -107,15 +105,13 @@ http://localhost:3000/sub/USER_EMAIL_OR_ID?compat=v2box
 http://localhost:3000/sub/USER_EMAIL_OR_ID?format=raw&compat=v2box
 ```
 
-صفحه‌ی جداگانه برای نمایش کانفیگ‌ها و لینک‌های مخصوص V2Box:
+صفحه‌ی نمایش کانفیگ‌ها و لینک‌های مخصوص V2Box:
 
 ```text
-http://localhost:3000/v2box/USER_EMAIL_OR_ID
-# یا
 http://localhost:3000/u/USER_EMAIL_OR_ID?compat=v2box
 ```
 
-در این صفحه، لیست کانفیگ‌ها هم با نسخه‌ی سازگار با V2Box نمایش داده می‌شود؛ یعنی اگر داخل `ech` علامت `+` باشد، به‌جای `%2B` به‌شکل `%252B` دیده می‌شود.
+در این صفحه، لیست کانفیگ‌ها هم با نسخه‌ی سازگار با V2Box نمایش داده می‌شود.
 
 این تغییر فقط روی پارامتر `ech` لینک‌های `vless://` اعمال می‌شود. خروجی معمولی همچنان `%2B` می‌سازد تا کلاینت‌هایی مثل v2rayNG، v2rayN و بقیه کلاینت‌های درست خراب نشوند.
 
@@ -320,7 +316,6 @@ PUBLIC_BASE_URL=https://sub.example.com
 ```text
 https://sub.example.com/my-secret-path/
 https://sub.example.com/my-secret-path/u/USER_EMAIL_OR_ID
-https://sub.example.com/my-secret-path/v2box/USER_EMAIL_OR_ID
 https://sub.example.com/my-secret-path/sub/USER_EMAIL_OR_ID
 https://sub.example.com/my-secret-path/sub/USER_EMAIL_OR_ID?format=raw
 https://sub.example.com/my-secret-path/sub/USER_EMAIL_OR_ID?compat=v2box

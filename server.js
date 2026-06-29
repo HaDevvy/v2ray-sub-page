@@ -671,7 +671,7 @@ async function loadUser(email, options = {}) {
   const v2boxSubscriptionUrl = publicUrl(`/sub/${publicEmail}`, { compat: 'v2box', key });
   const rawV2boxSubscriptionUrl = publicUrl(`/sub/${publicEmail}`, { compat: 'v2box', format: 'raw', key });
   const userPageUrl = publicUrl(`/u/${publicEmail}`, { key });
-  const v2boxUserPageUrl = publicUrl(`/v2box/${publicEmail}`, { key });
+  const v2boxUserPageUrl = publicUrl(`/u/${publicEmail}`, { compat: 'v2box', key });
 
   return {
     client: sanitizeClient(client),
@@ -738,7 +738,7 @@ router.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-router.get(['/u/:email', '/v2box/:email'], (req, res) => {
+router.get('/u/:email', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'user.html'));
 });
 

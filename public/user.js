@@ -2,13 +2,12 @@ const $ = (selector) => document.querySelector(selector);
 const params = new URLSearchParams(location.search);
 const pathParts = location.pathname.split('/').filter(Boolean);
 const uIndex = pathParts.lastIndexOf('u');
-const v2boxIndex = pathParts.lastIndexOf('v2box');
-const routeIndex = v2boxIndex >= 0 ? v2boxIndex : uIndex;
+const routeIndex = uIndex;
 const appBasePath = routeIndex > 0 ? `/${pathParts.slice(0, routeIndex).join('/')}` : '';
 const emailParts = routeIndex >= 0 ? pathParts.slice(routeIndex + 1) : [pathParts.at(-1) || ''];
 const email = decodeURIComponent(emailParts.join('/'));
 const key = params.get('key');
-const compat = String(params.get('compat') || (v2boxIndex >= 0 ? 'v2box' : '')).trim().toLowerCase();
+const compat = String(params.get('compat') || '').trim().toLowerCase();
 const isV2BoxMode = ['v2box', 'v2-box', 'v2_box'].includes(compat);
 
 const withBase = (pathname) => `${appBasePath}${pathname.startsWith('/') ? pathname : `/${pathname}`}`;
@@ -103,8 +102,7 @@ function fallbackSubscriptionUrl({ format = '', compat = '' } = {}) {
 }
 
 function fallbackUserPageUrl({ compat = '' } = {}) {
-  if (compat === 'v2box') return absolutePortalUrl(`/v2box/${encodeURIComponent(email)}`);
-  return absolutePortalUrl(`/u/${encodeURIComponent(email)}`);
+  return absolutePortalUrl(`/u/${encodeURIComponent(email)}`, { compat });
 }
 
 function setLink(id, href) {
@@ -176,10 +174,13 @@ async function init() {
 
     const v2boxNotice = $('#v2boxNotice');
     if (v2boxNotice) {
-      v2boxNotice.textContent = isV2BoxMode
-        ? 'در این صفحه مقدار ECH برای V2Box سازگار شده است؛ + داخل ECH به %252B تبدیل می‌شود.'
-        : 'اگر کلاینت V2Box مقدار ECH را با فاصله می‌خواند، از لینک یا صفحه سازگار با V2Box استفاده کن.';
+      v2boxNotice.textContent = 'اگر از اپلیکیشن V2Box استفاده می‌کنید از لینک‌های زیر استفاده کنید.';
     }
+
+    const normalPage = $('#openNormalPage');
+    const v2boxPage = $('#openV2boxPage');
+    if (normalPage) normalPage.classList.toggle('active', !isV2BoxMode);
+    if (v2boxPage) v2boxPage.classList.toggle('active', isV2BoxMode);
 
     renderConfigs(data.links);
     renderDetails(data);

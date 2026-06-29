@@ -150,9 +150,14 @@ try {
     throw new Error(`user page failed: ${page.status}`);
   }
 
-  const v2boxPage = await request(`${base}/secret-test/v2box/demo-user?key=test-key`);
+  const v2boxPage = await request(`${base}/secret-test/u/demo-user?compat=v2box&key=test-key`);
   if (v2boxPage.status !== 200 || !v2boxPage.text.includes('صفحه مخصوص V2Box')) {
     throw new Error(`V2Box user page failed: ${v2boxPage.status}`);
+  }
+
+  const removedV2boxPath = await request(`${base}/secret-test/v2box/demo-user?key=test-key`);
+  if (removedV2boxPath.status !== 404) {
+    throw new Error(`/v2box path should not exist anymore, got ${removedV2boxPath.status}`);
   }
 
   const hostsPage = await request(`${base}/secret-test/hosts?host=example.com&key=test-key`);
@@ -194,8 +199,11 @@ try {
   if (!apiJson.obj.v2boxSubscriptionUrl.includes('compat=v2box') || !apiJson.obj.rawV2boxSubscriptionUrl.includes('compat=v2box') || !apiJson.obj.rawV2boxSubscriptionUrl.includes('format=raw')) {
     throw new Error(`V2Box subscription URLs are missing from API response: ${JSON.stringify(apiJson.obj)}`);
   }
-  if (!apiJson.obj.v2boxUserPageUrl.includes('/v2box/demo-user') || !apiJson.obj.userPageUrl.includes('/u/demo-user')) {
+  if (!apiJson.obj.v2boxUserPageUrl.includes('/u/demo-user') || !apiJson.obj.v2boxUserPageUrl.includes('compat=v2box') || !apiJson.obj.userPageUrl.includes('/u/demo-user')) {
     throw new Error(`V2Box/user page URLs are missing from API response: ${JSON.stringify(apiJson.obj)}`);
+  }
+  if (apiJson.obj.v2boxUserPageUrl.includes('/v2box/')) {
+    throw new Error(`V2Box user page URL should use /u with compat=v2box: ${apiJson.obj.v2boxUserPageUrl}`);
   }
   const allUrlsFromApi = apiJson.obj.links.map((item) => item.url).join('\n');
   const vlessFromApi = apiJson.obj.links.find((item) => item.protocol === 'VLESS' && item.url.includes('@example.com:443') && item.url.includes('ech='))?.url || '';
