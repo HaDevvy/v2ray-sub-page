@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Subscription Panel icon">
+  <defs>
+    <linearGradient id="bg" x1="70" y1="30" x2="440" y2="480" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#07162f"/>
+      <stop offset="0.52" stop-color="#071126"/>
+      <stop offset="1" stop-color="#050915"/>
+    </linearGradient>
+    <linearGradient id="cyanBlue" x1="102" y1="80" x2="416" y2="420" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#24ffe0"/>
+      <stop offset="0.48" stop-color="#19d7f1"/>
+      <stop offset="1" stop-color="#1878ff"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="45%" cy="33%" r="70%">
+      <stop offset="0" stop-color="#1eead7" stop-opacity="0.38"/>
+      <stop offset="0.55" stop-color="#157bff" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="softGlow" x="-35%" y="-35%" width="170%" height="170%">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.06 0 0 0 0 0.85 0 0 0 0 1 0 0 0 0.65 0" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect width="512" height="512" rx="104" fill="url(#bg)"/>
+  <rect width="512" height="512" rx="104" fill="url(#glow)"/>
+  <path d="M256 70 397 151c15 9 24 25 24 42v130c0 17-9 33-24 42L256 446 115 365c-15-9-24-25-24-42V193c0-17 9-33 24-42L256 70Z" fill="none" stroke="url(#cyanBlue)" stroke-width="27" stroke-linejoin="round" filter="url(#softGlow)"/>
+
+  <g fill="none" stroke="url(#cyanBlue)" stroke-linecap="round" stroke-linejoin="round" filter="url(#softGlow)">
+    <path d="M216 297h-45c-42 0-76-34-76-76s34-76 76-76h72c28 0 53 15 67 39" stroke-width="31" transform="translate(44 52) rotate(0 205 220)"/>
+    <path d="M296 215h45c42 0 76 34 76 76s-34 76-76 76h-72c-28 0-53-15-67-39" stroke-width="31" transform="translate(-44 -52) rotate(0 307 292)"/>
+    <path d="M173 336c-30-7-53-34-53-67 0-9 2-18 5-26" stroke-width="13" opacity="0.86"/>
+    <path d="M339 176c30 7 53 34 53 67 0 9-2 18-5 26" stroke-width="13" opacity="0.86"/>
+  </g>
+
+  <circle cx="149" cy="344" r="23" fill="#31ffe2" filter="url(#softGlow)"/>
+  <circle cx="365" cy="168" r="23" fill="#51fff0" filter="url(#softGlow)"/>
+</svg>
