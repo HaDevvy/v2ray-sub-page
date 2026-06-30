@@ -1,8 +1,0 @@
-{
-  "default": "ech",
-  "sni": {
-    "example.com": "both",
-    "no-ech.example.com": "off",
-    "*.ech.example.com": "ech"
-  }
-}
