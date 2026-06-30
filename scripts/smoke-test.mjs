@@ -82,7 +82,8 @@ const panel = http.createServer((req, res) => {
       obj: [
         'vmess://mock-config-one#Demo%20VMess',
         'vless://mock-config-two@example.com:443?encryption=none&allowInsecure=0&sni=example.com&type=ws#Demo%20VLESS',
-        'vless://mock-config-market@market.hqmq.com:443?encryption=none&allowInsecure=0&sni=market.hqmq.com&type=ws#Demo%20Market%20VLESS'
+        'vless://mock-config-market@market.hqmq.com:443?encryption=none&allowInsecure=0&sni=market.hqmq.com&type=ws#Demo%20Market%20VLESS',
+        'vless://mock-config-de@de-origin.example:2080?encryption=none&allowInsecure=0&sni=de.hqmq.pro&type=tcp#Demo%20DE%20VLESS'
       ]
     }));
     return;
@@ -98,15 +99,19 @@ const hostsDirPath = path.join(testDataDir, 'hosts');
 const appConfigPath = path.join(testDataDir, 'config.json');
 await fs.mkdir(hostsDirPath, { recursive: true });
 await fs.writeFile(echFilePath, 'A+B/C=\n');
-await fs.writeFile(appConfigPath, JSON.stringify({
-  vless: {
-    defaultEchMode: 'ech',
-    sniPolicies: {
-      'example.com': { ech: 'both', port: 2083 },
-      'market.hqmq.com': 'off'
+await fs.writeFile(appConfigPath, `
+{
+  "vless": {
+    "defaultEchMode": "ech",
+    "sniPolicies": {
+      "example.com": { "ech": "both", "port": 2083 },
+      "market.hqmq.com": "off",
+      "de.hqmq.pro": { "ech": "ech", "port": 443 },
+      # this comment and the trailing comma above should not break config loading
     }
   }
-}, null, 2));
+}
+`);
 await fs.writeFile(path.join(hostsDirPath, 'example.com.txt'), 'alt1.example.com\nalt2.example.com\n');
 await fs.writeFile(path.join(hostsDirPath, 'market.hqmq.com.txt'), 'market-alt.example.com\n');
 
@@ -212,7 +217,7 @@ try {
   const api = await request(`${base}/secret-test/api/user/demo-user?key=test-key`);
   if (api.status !== 200) throw new Error(`api failed: ${api.status} ${api.text}`);
   const apiJson = JSON.parse(api.text);
-  if (!apiJson.success || apiJson.obj.links.length !== 9) throw new Error(`api payload is invalid: expected 9 links, got ${apiJson.obj.links.length}`);
+  if (!apiJson.success || apiJson.obj.links.length !== 10) throw new Error(`api payload is invalid: expected 10 links, got ${apiJson.obj.links.length}`);
   if (!apiJson.obj.v2boxSubscriptionUrl.includes('compat=v2box') || !apiJson.obj.rawV2boxSubscriptionUrl.includes('compat=v2box') || !apiJson.obj.rawV2boxSubscriptionUrl.includes('format=raw')) {
     throw new Error(`V2Box subscription URLs are missing from API response: ${JSON.stringify(apiJson.obj)}`);
   }
@@ -246,6 +251,9 @@ try {
   if (expandedHosts.includes('vless://mock-config-market@alt1.example.com:443')) {
     throw new Error(`VLESS host expansion leaked between source hosts: ${expandedHosts}`);
   }
+  if (!expandedHosts.includes('vless://mock-config-de@de-origin.example:443') || expandedHosts.includes('vless://mock-config-de@de-origin.example:2080')) {
+    throw new Error(`VLESS de.hqmq.pro port override failed: ${expandedHosts}`);
+  }
 
   const apiV2box = await request(`${base}/secret-test/api/user/demo-user?compat=v2box&key=test-key`);
   if (apiV2box.status !== 200) throw new Error(`api V2Box failed: ${apiV2box.status} ${apiV2box.text}`);
@@ -271,8 +279,8 @@ try {
   if (!decoded.includes('vmess://mock-config-one') || !decoded.includes('vless://mock-config-two')) {
     throw new Error('subscription body is invalid');
   }
-  if (!decoded.includes('ech=A%2BB%2FC%3D') || !decoded.includes('@alt1.example.com:2083') || !decoded.includes('@market-alt.example.com:443')) {
-    throw new Error(`subscription body does not include encoded ECH and per-source-host expanded hosts: ${decoded}`);
+  if (!decoded.includes('ech=A%2BB%2FC%3D') || !decoded.includes('@alt1.example.com:2083') || !decoded.includes('@market-alt.example.com:443') || !decoded.includes('@de-origin.example:443')) {
+    throw new Error(`subscription body does not include encoded ECH, per-source-host expanded hosts, and de.hqmq.pro port override: ${decoded}`);
   }
   if (!decoded.includes('Demo%20VLESS%20ECH') || !decoded.includes('Demo%20VLESS%20No%20ECH')) {
     throw new Error(`subscription body does not include both ECH and no-ECH variants for example.com SNI: ${decoded}`);

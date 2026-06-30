@@ -7,11 +7,6 @@
         "ech": "ech",
         "port": 443
       }
-      #"no-ech.example.com": "off",
-      #"*.ech.example.com": {
-      #  "ech": "ech",
-      #  "port": 8443
-      #}
     }
   }
 }

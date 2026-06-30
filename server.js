@@ -314,10 +314,132 @@ function normalizeAppConfig(payload = {}) {
   return config;
 }
 
+function stripJsonComments(content = '') {
+  const text = String(content || '');
+  let output = '';
+  let inString = false;
+  let escaped = false;
+  let inLineComment = false;
+  let inBlockComment = false;
+
+  for (let i = 0; i < text.length; i += 1) {
+    const char = text[i];
+    const nextChar = text[i + 1];
+
+    if (inLineComment) {
+      if (char === '\n' || char === '\r') {
+        inLineComment = false;
+        output += char;
+      }
+      continue;
+    }
+
+    if (inBlockComment) {
+      if (char === '*' && nextChar === '/') {
+        inBlockComment = false;
+        i += 1;
+      }
+      continue;
+    }
+
+    if (inString) {
+      output += char;
+      if (escaped) {
+        escaped = false;
+      } else if (char === '\\') {
+        escaped = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      inString = true;
+      output += char;
+      continue;
+    }
+
+    if (char === '#') {
+      inLineComment = true;
+      continue;
+    }
+
+    if (char === '/' && nextChar === '/') {
+      inLineComment = true;
+      i += 1;
+      continue;
+    }
+
+    if (char === '/' && nextChar === '*') {
+      inBlockComment = true;
+      i += 1;
+      continue;
+    }
+
+    output += char;
+  }
+
+  return output;
+}
+
+function removeJsonTrailingCommas(content = '') {
+  const text = String(content || '');
+  let output = '';
+  let inString = false;
+  let escaped = false;
+
+  for (let i = 0; i < text.length; i += 1) {
+    const char = text[i];
+
+    if (inString) {
+      output += char;
+      if (escaped) {
+        escaped = false;
+      } else if (char === '\\') {
+        escaped = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      inString = true;
+      output += char;
+      continue;
+    }
+
+    if (char === ',') {
+      let nextIndex = i + 1;
+      while (nextIndex < text.length && /\s/.test(text[nextIndex])) nextIndex += 1;
+      if (text[nextIndex] === '}' || text[nextIndex] === ']') continue;
+    }
+
+    output += char;
+  }
+
+  return output;
+}
+
+function parseAppConfigContent(content = '') {
+  try {
+    return JSON.parse(content);
+  } catch (initialError) {
+    const relaxedContent = removeJsonTrailingCommas(stripJsonComments(content));
+    try {
+      return JSON.parse(relaxedContent);
+    } catch (relaxedError) {
+      relaxedError.message = `${relaxedError.message}; original JSON error: ${initialError.message}`;
+      throw relaxedError;
+    }
+  }
+}
+
 async function readAppConfig() {
   try {
     const content = await fs.readFile(APP_CONFIG_PATH, 'utf8');
-    return normalizeAppConfig(JSON.parse(content));
+    return normalizeAppConfig(parseAppConfigContent(content));
   } catch (err) {
     if (err?.code !== 'ENOENT') {
       console.warn(`[config] Cannot read/parse ${APP_CONFIG_PATH}: ${err.message}. Falling back to default VLESS ECH mode: ech`);
