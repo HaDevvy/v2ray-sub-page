@@ -95,14 +95,16 @@ const panel = http.createServer((req, res) => {
 const testDataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'v2-sub-page-data-'));
 const echFilePath = path.join(testDataDir, 'last_ech.txt');
 const hostsDirPath = path.join(testDataDir, 'hosts');
-const echConfigPath = path.join(testDataDir, 'ech-config.json');
+const appConfigPath = path.join(testDataDir, 'config.json');
 await fs.mkdir(hostsDirPath, { recursive: true });
 await fs.writeFile(echFilePath, 'A+B/C=\n');
-await fs.writeFile(echConfigPath, JSON.stringify({
-  default: 'ech',
-  sni: {
-    'example.com': 'both',
-    'market.hqmq.com': 'off'
+await fs.writeFile(appConfigPath, JSON.stringify({
+  vless: {
+    defaultEchMode: 'ech',
+    sniPolicies: {
+      'example.com': { ech: 'both', port: 2083 },
+      'market.hqmq.com': 'off'
+    }
   }
 }, null, 2));
 await fs.writeFile(path.join(hostsDirPath, 'example.com.txt'), 'alt1.example.com\nalt2.example.com\n');
@@ -124,7 +126,7 @@ const child = spawn(process.execPath, ['server.js'], {
     SECRET_PATH: 'secret-test',
     ACCESS_KEY: 'test-key',
     ECH_FILE_PATH: echFilePath,
-    ECH_CONFIG_PATH: echConfigPath,
+    APP_CONFIG_PATH: appConfigPath,
     HOSTS_DIR_PATH: hostsDirPath,
     HOST_SECRET_PATH: 'host-secret-test',
     HOSTS_ADMIN_KEY: 'admin-key'
@@ -221,19 +223,22 @@ try {
     throw new Error(`V2Box user page URL should use /u with compat=v2box: ${apiJson.obj.v2boxUserPageUrl}`);
   }
   const allUrlsFromApi = apiJson.obj.links.map((item) => item.url).join('\n');
-  const vlessFromApi = apiJson.obj.links.find((item) => item.protocol === 'VLESS' && item.url.includes('@example.com:443') && item.url.includes('ech='))?.url || '';
+  const vlessFromApi = apiJson.obj.links.find((item) => item.protocol === 'VLESS' && item.url.includes('@example.com:2083') && item.url.includes('ech='))?.url || '';
   if (!vlessFromApi.includes('allowInsecure=0&ech=A%2BB%2FC%3D&sni=example.com&type=ws')) {
     throw new Error(`VLESS ECH was not injected/encoded in API response: ${vlessFromApi}`);
   }
-  if (!allUrlsFromApi.includes('mock-config-two@example.com:443?encryption=none&allowInsecure=0&sni=example.com&type=ws#Demo%20VLESS%20No%20ECH')) {
+  if (!allUrlsFromApi.includes('mock-config-two@example.com:2083?encryption=none&allowInsecure=0&sni=example.com&type=ws#Demo%20VLESS%20No%20ECH')) {
     throw new Error(`VLESS both-mode did not create a no-ECH variant: ${allUrlsFromApi}`);
   }
   if (/mock-config-market@[^\n]+ech=/.test(allUrlsFromApi)) {
     throw new Error(`VLESS off-mode did not remove ECH for market SNI: ${allUrlsFromApi}`);
   }
   const expandedHosts = allUrlsFromApi;
-  if (!expandedHosts.includes('vless://mock-config-two@alt1.example.com:443') || !expandedHosts.includes('vless://mock-config-two@alt2.example.com:443')) {
+  if (!expandedHosts.includes('vless://mock-config-two@alt1.example.com:2083') || !expandedHosts.includes('vless://mock-config-two@alt2.example.com:2083')) {
     throw new Error(`VLESS example.com host expansion failed: ${expandedHosts}`);
+  }
+  if (expandedHosts.includes('vless://mock-config-two@example.com:443') || expandedHosts.includes('vless://mock-config-two@alt1.example.com:443')) {
+    throw new Error(`VLESS per-SNI port override was not applied to example.com variants: ${expandedHosts}`);
   }
   if (!expandedHosts.includes('vless://mock-config-market@market-alt.example.com:443')) {
     throw new Error(`VLESS market.hqmq.com host expansion failed: ${expandedHosts}`);
@@ -266,7 +271,7 @@ try {
   if (!decoded.includes('vmess://mock-config-one') || !decoded.includes('vless://mock-config-two')) {
     throw new Error('subscription body is invalid');
   }
-  if (!decoded.includes('ech=A%2BB%2FC%3D') || !decoded.includes('@alt1.example.com:443') || !decoded.includes('@market-alt.example.com:443')) {
+  if (!decoded.includes('ech=A%2BB%2FC%3D') || !decoded.includes('@alt1.example.com:2083') || !decoded.includes('@market-alt.example.com:443')) {
     throw new Error(`subscription body does not include encoded ECH and per-source-host expanded hosts: ${decoded}`);
   }
   if (!decoded.includes('Demo%20VLESS%20ECH') || !decoded.includes('Demo%20VLESS%20No%20ECH')) {
@@ -304,7 +309,7 @@ try {
 
   const raw = await request(`${base}/secret-test/sub/demo-user?format=raw&key=test-key`);
   if (raw.status !== 200 || !raw.text.includes('\n')) throw new Error('raw subscription failed');
-  if (!raw.text.includes('ech=NEW%2BECH%3D') || !raw.text.includes('@new-host.example.com:443')) {
+  if (!raw.text.includes('ech=NEW%2BECH%3D') || !raw.text.includes('@new-host.example.com:2083')) {
     throw new Error(`raw subscription did not use updated ECH/hosts files: ${raw.text}`);
   }
   if (!raw.text.includes('Demo%20VLESS%20ECH') || !raw.text.includes('Demo%20VLESS%20No%20ECH')) {
@@ -328,7 +333,7 @@ try {
   const qr = await request(`${base}/secret-test/qr?text=${encodeURIComponent('hello')}&key=test-key`);
   if (qr.status !== 200 || !qr.text.includes('<svg')) throw new Error('qr failed');
 
-  console.log('Smoke test passed. Routes, secret path, hosts secret path, access key, panel proxy, per-source-host editor, subscription expansion, QR, per-SNI ECH policy, standard and V2Box-compatible ECH encoding, and sensitive-field masking are OK.');
+  console.log('Smoke test passed. Routes, secret path, hosts secret path, access key, panel proxy, per-source-host editor, subscription expansion, QR, per-SNI ECH/port policy, standard and V2Box-compatible ECH encoding, and sensitive-field masking are OK.');
 } finally {
   child.kill('SIGTERM');
   panel.close();

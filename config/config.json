@@ -1,0 +1,17 @@
+{
+  "vless": {
+    "defaultEchMode": "ech",
+    "sniPolicies": {
+      "example.com": "both",
+      "www.example.com": {
+        "ech": "ech",
+        "port": 2083
+      },
+      "no-ech.example.com": "off",
+      "*.ech.example.com": {
+        "ech": "ech",
+        "port": 8443
+      }
+    }
+  }
+}

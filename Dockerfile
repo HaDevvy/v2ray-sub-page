@@ -18,6 +18,7 @@ RUN npm install --omit=dev --no-package-lock --no-audit --no-fund \
 
 COPY server.js ./
 COPY ech-updater-data ./ech-updater-data
+COPY config ./config
 COPY public ./public
 
 RUN mkdir -p /app/data/hosts \

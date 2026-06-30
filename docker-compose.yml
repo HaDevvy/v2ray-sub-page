@@ -11,6 +11,7 @@ services:
       - "3000"
     volumes:
       - /root/dev/Market/ech-updater-data:/app/ech-updater-data:ro
+      - /root/dev/Market/config:/app/config:ro
       - v2-sub-page-data:/app/data
 
 volumes:

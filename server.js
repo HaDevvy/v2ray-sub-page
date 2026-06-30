@@ -17,9 +17,10 @@ const ACCESS_KEY = process.env.ACCESS_KEY || '';
 const ECH_FILE_PATH = process.env.ECH_FILE_PATH
   ? path.resolve(__dirname, process.env.ECH_FILE_PATH)
   : path.join(__dirname, 'ech-updater-data', 'last_ech.txt');
-const ECH_CONFIG_PATH = process.env.ECH_CONFIG_PATH
-  ? path.resolve(__dirname, process.env.ECH_CONFIG_PATH)
-  : path.join(__dirname, 'ech-updater-data', 'ech-config.json');
+const APP_CONFIG_PATH_VALUE = process.env.APP_CONFIG_PATH || process.env.CONFIG_PATH || process.env.ECH_CONFIG_PATH;
+const APP_CONFIG_PATH = APP_CONFIG_PATH_VALUE
+  ? path.resolve(__dirname, APP_CONFIG_PATH_VALUE)
+  : path.join(__dirname, 'config', 'config.json');
 const HOSTS_DIR_PATH = process.env.HOSTS_DIR_PATH
   ? path.resolve(__dirname, process.env.HOSTS_DIR_PATH)
   : path.join(__dirname, 'data', 'hosts');
@@ -193,67 +194,155 @@ function normalizeEchMode(value, fallback = 'ech') {
   return echModeAliases.get(key) || fallback;
 }
 
-function normalizeEchConfigEntry(value) {
-  if (typeof value === 'string' || typeof value === 'boolean' || typeof value === 'number') {
-    return normalizeEchMode(value, 'ech');
-  }
+function normalizePortValue(value) {
+  if (value === null || value === undefined || value === '') return '';
 
-  if (value && typeof value === 'object') {
-    return normalizeEchMode(value.mode ?? value.ech ?? value.enabled, 'ech');
-  }
+  const text = String(value).trim();
+  if (!/^\d{1,5}$/.test(text)) return '';
 
-  return 'ech';
+  const port = Number(text);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) return '';
+
+  return String(port);
 }
 
-function normalizeEchConfig(payload = {}) {
-  const config = { defaultMode: 'ech', exact: new Map(), wildcard: [] };
-  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return config;
+function normalizeSniPolicyEntry(value) {
+  if (typeof value === 'string' || typeof value === 'boolean' || typeof value === 'number') {
+    return { mode: normalizeEchMode(value, 'ech'), port: '' };
+  }
 
-  config.defaultMode = normalizeEchMode(payload.default ?? payload.defaultMode ?? payload.mode, 'ech');
-  const sniConfig = payload.sni && typeof payload.sni === 'object' && !Array.isArray(payload.sni)
-    ? payload.sni
-    : payload;
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const hasMode = Object.prototype.hasOwnProperty.call(value, 'mode')
+      || Object.prototype.hasOwnProperty.call(value, 'ech')
+      || Object.prototype.hasOwnProperty.call(value, 'enabled');
+    return {
+      mode: hasMode ? normalizeEchMode(value.mode ?? value.ech ?? value.enabled, 'ech') : '',
+      port: normalizePortValue(value.port ?? value.overridePort ?? value.replacePort ?? value.targetPort)
+    };
+  }
 
-  Object.entries(sniConfig).forEach(([rawSni, rawMode]) => {
-    if (['default', 'defaultmode', 'mode', 'sni'].includes(String(rawSni).toLowerCase())) return;
+  return { mode: 'ech', port: '' };
+}
 
-    const sniKey = String(rawSni || '').trim().toLowerCase().replace(/\.+$/, '');
-    const mode = normalizeEchConfigEntry(rawMode);
-    if (!sniKey) return;
+function mergeSniPolicy(existing = {}, next = {}) {
+  return {
+    mode: next.mode || existing.mode || '',
+    port: next.port || existing.port || ''
+  };
+}
 
-    if (sniKey.startsWith('*.')) {
-      const suffix = normalizeHostValue(sniKey.slice(2));
-      if (suffix) config.wildcard.push({ suffix, mode });
+function upsertSniPolicy(config, rawSni, policy) {
+  const sniKey = String(rawSni || '').trim().toLowerCase().replace(/\.+$/, '');
+  if (!sniKey) return;
+
+  if (sniKey.startsWith('*.')) {
+    const suffix = normalizeHostValue(sniKey.slice(2));
+    if (!suffix) return;
+
+    const existing = config.wildcard.find((item) => item.suffix === suffix);
+    if (existing) {
+      Object.assign(existing, mergeSniPolicy(existing, policy));
       return;
     }
 
-    const sni = normalizeHostValue(sniKey);
-    if (sni) config.exact.set(sni, mode);
+    config.wildcard.push({ suffix, ...mergeSniPolicy({}, policy) });
+    return;
+  }
+
+  const sni = normalizeHostValue(sniKey);
+  if (!sni) return;
+
+  config.exact.set(sni, mergeSniPolicy(config.exact.get(sni), policy));
+}
+
+function normalizeAppConfig(payload = {}) {
+  const config = { defaultMode: 'ech', exact: new Map(), wildcard: [] };
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return config;
+
+  const vlessConfig = payload.vless && typeof payload.vless === 'object' && !Array.isArray(payload.vless)
+    ? payload.vless
+    : payload;
+
+  config.defaultMode = normalizeEchMode(
+    vlessConfig.defaultEchMode
+      ?? vlessConfig.defaultMode
+      ?? vlessConfig.default
+      ?? vlessConfig.echMode
+      ?? vlessConfig.mode,
+    'ech'
+  );
+
+  const sniConfig = vlessConfig.sniPolicies && typeof vlessConfig.sniPolicies === 'object' && !Array.isArray(vlessConfig.sniPolicies)
+    ? vlessConfig.sniPolicies
+    : vlessConfig.sni && typeof vlessConfig.sni === 'object' && !Array.isArray(vlessConfig.sni)
+      ? vlessConfig.sni
+      : payload.vless
+        ? {}
+        : vlessConfig;
+
+  const reservedSniKeys = new Set([
+    'default',
+    'defaultmode',
+    'defaultechmode',
+    'echmode',
+    'mode',
+    'vless',
+    'sni',
+    'snipolicies',
+    'ports',
+    'portoverrides'
+  ]);
+
+  Object.entries(sniConfig).forEach(([rawSni, rawPolicy]) => {
+    if (reservedSniKeys.has(String(rawSni).toLowerCase())) return;
+    upsertSniPolicy(config, rawSni, normalizeSniPolicyEntry(rawPolicy));
   });
+
+  const portConfig = vlessConfig.ports && typeof vlessConfig.ports === 'object' && !Array.isArray(vlessConfig.ports)
+    ? vlessConfig.ports
+    : vlessConfig.portOverrides && typeof vlessConfig.portOverrides === 'object' && !Array.isArray(vlessConfig.portOverrides)
+      ? vlessConfig.portOverrides
+      : null;
+
+  if (portConfig) {
+    Object.entries(portConfig).forEach(([rawSni, rawPort]) => {
+      const port = normalizePortValue(rawPort);
+      if (port) upsertSniPolicy(config, rawSni, { port });
+    });
+  }
 
   return config;
 }
 
-async function readEchConfig() {
+async function readAppConfig() {
   try {
-    const content = await fs.readFile(ECH_CONFIG_PATH, 'utf8');
-    return normalizeEchConfig(JSON.parse(content));
+    const content = await fs.readFile(APP_CONFIG_PATH, 'utf8');
+    return normalizeAppConfig(JSON.parse(content));
   } catch (err) {
     if (err?.code !== 'ENOENT') {
-      console.warn(`[ech-config] Cannot read/parse ${ECH_CONFIG_PATH}: ${err.message}. Falling back to default mode: ech`);
+      console.warn(`[config] Cannot read/parse ${APP_CONFIG_PATH}: ${err.message}. Falling back to default VLESS ECH mode: ech`);
     }
-    return normalizeEchConfig();
+    return normalizeAppConfig();
   }
 }
 
-function echModeForSni(config, sniValue) {
+function sniPolicyForSni(appConfig, sniValue) {
   const sni = normalizeHostValue(sniValue);
-  if (!sni) return config.defaultMode;
+  if (!sni) return { mode: appConfig.defaultMode, port: '' };
 
-  if (config.exact.has(sni)) return config.exact.get(sni);
+  const exactPolicy = appConfig.exact.get(sni);
+  if (exactPolicy) return { mode: exactPolicy.mode || appConfig.defaultMode, port: exactPolicy.port || '' };
 
-  const wildcardMatch = config.wildcard.find(({ suffix }) => sni === suffix || sni.endsWith(`.${suffix}`));
-  return wildcardMatch?.mode || config.defaultMode;
+  const wildcardMatch = appConfig.wildcard.find(({ suffix }) => sni === suffix || sni.endsWith(`.${suffix}`));
+  return { mode: wildcardMatch?.mode || appConfig.defaultMode, port: wildcardMatch?.port || '' };
+}
+
+function echModeForSni(appConfig, sniValue) {
+  return sniPolicyForSni(appConfig, sniValue).mode;
+}
+
+function portOverrideForSni(appConfig, sniValue) {
+  return sniPolicyForSni(appConfig, sniValue).port;
 }
 
 
@@ -518,11 +607,11 @@ function uniqueLinks(links = []) {
   });
 }
 
-function applyEchPolicyToVlessLink(link, latestEch, echConfig) {
+function applyEchPolicyToVlessLink(link, latestEch, appConfig) {
   const rawLink = String(link || '');
   if (protocolOf(rawLink) !== 'vless') return [rawLink];
 
-  const mode = echModeForSni(echConfig, vlessSni(rawLink));
+  const mode = echModeForSni(appConfig, vlessSni(rawLink));
   const withEch = addEchToVlessLink(rawLink, latestEch || getExistingEchValue(rawLink));
   const withoutEch = removeEchFromVlessLink(rawLink);
 
@@ -553,10 +642,9 @@ function vlessAuthorityHost(link) {
   return normalizeHostValue(authorityAfterAt.slice(0, portSeparatorIndex));
 }
 
-function replaceVlessAuthorityHost(link, host) {
+function vlessLinkAuthorityParts(link) {
   const rawLink = String(link || '');
-  const nextHost = String(host || '').trim();
-  if (!nextHost || protocolOf(rawLink) !== 'vless') return rawLink;
+  if (protocolOf(rawLink) !== 'vless') return null;
 
   const hashIndex = rawLink.indexOf('#');
   const beforeHash = hashIndex >= 0 ? rawLink.slice(0, hashIndex) : rawLink;
@@ -567,15 +655,44 @@ function replaceVlessAuthorityHost(link, host) {
   const query = queryIndex >= 0 ? beforeHash.slice(queryIndex) : '';
 
   const atIndex = beforeQuery.lastIndexOf('@');
-  if (atIndex < 0) return rawLink;
+  if (atIndex < 0) return null;
 
   const authorityAfterAt = beforeQuery.slice(atIndex + 1);
   const portSeparatorIndex = authorityAfterAt.lastIndexOf(':');
-  if (portSeparatorIndex <= 0) return rawLink;
+  if (portSeparatorIndex <= 0) return null;
 
-  const prefix = beforeQuery.slice(0, atIndex + 1);
-  const portPart = authorityAfterAt.slice(portSeparatorIndex);
-  return `${prefix}${nextHost}${portPart}${query}${hash}`;
+  return {
+    rawLink,
+    prefix: beforeQuery.slice(0, atIndex + 1),
+    hostPart: authorityAfterAt.slice(0, portSeparatorIndex),
+    portPart: authorityAfterAt.slice(portSeparatorIndex + 1),
+    query,
+    hash
+  };
+}
+
+function replaceVlessAuthorityHost(link, host) {
+  const parts = vlessLinkAuthorityParts(link);
+  const nextHost = String(host || '').trim();
+  if (!parts || !nextHost) return String(link || '');
+
+  return `${parts.prefix}${nextHost}:${parts.portPart}${parts.query}${parts.hash}`;
+}
+
+function replaceVlessAuthorityPort(link, port) {
+  const parts = vlessLinkAuthorityParts(link);
+  const nextPort = normalizePortValue(port);
+  if (!parts || !nextPort) return String(link || '');
+
+  return `${parts.prefix}${parts.hostPart}:${nextPort}${parts.query}${parts.hash}`;
+}
+
+function applyPortPolicyToVlessLink(link, appConfig) {
+  const rawLink = String(link || '');
+  if (protocolOf(rawLink) !== 'vless') return rawLink;
+
+  const port = portOverrideForSni(appConfig, vlessSni(rawLink));
+  return port ? replaceVlessAuthorityPort(rawLink, port) : rawLink;
 }
 
 function expandVlessLinkByHosts(link, hosts = []) {
@@ -684,12 +801,13 @@ async function loadUser(email, options = {}) {
   }
 
   const subPayload = await panelGet(`/panel/api/clients/subLinks/${encodeURIComponent(client.subId)}`);
-  const [latestEch, echConfig] = await Promise.all([readLatestEch(), readEchConfig()]);
+  const [latestEch, appConfig] = await Promise.all([readLatestEch(), readAppConfig()]);
   const rawLinks = Array.isArray(subPayload?.obj) ? subPayload.obj.filter(Boolean) : [];
   const sourceHostCache = new Map();
   const expandedUrlGroups = await Promise.all(rawLinks.map(async (rawUrl) => {
-    const echPolicyUrls = applyEchPolicyToVlessLink(rawUrl, latestEch, echConfig);
-    const expandedGroups = await Promise.all(echPolicyUrls.map(async (url) => {
+    const sniPolicyUrls = applyEchPolicyToVlessLink(rawUrl, latestEch, appConfig)
+      .map((url) => applyPortPolicyToVlessLink(url, appConfig));
+    const expandedGroups = await Promise.all(sniPolicyUrls.map(async (url) => {
       const sourceHost = vlessAuthorityHost(url);
       const customHosts = await readCustomHostsForSourceHost(sourceHost, sourceHostCache);
       return expandVlessLinkByHosts(url, customHosts);
@@ -875,5 +993,5 @@ app.listen(PORT, () => {
   console.log(`Public root: ${publicRoot}`);
   console.log(`Hosts page path: ${SECRET_PATH || ''}${HOSTS_PAGE_PATH}`);
   console.log(`Hosts API path: ${SECRET_PATH || ''}${HOSTS_API_PATH}`);
-  console.log(`ECH config path: ${ECH_CONFIG_PATH}`);
+  console.log(`App config path: ${APP_CONFIG_PATH}`);
 });
