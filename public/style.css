@@ -645,3 +645,13 @@ button.ghost:hover {
   input { font-size: 14px; }
   code { font-size: 12.5px; }
 }
+
+/* Xray JSON subscription selector */
+.json-action { display: flex; flex-direction: column; gap: 12px; }
+.json-select-label { font-weight: 650; font-size: .88rem; }
+#jsonConfigSelect {
+  width: 100%; padding: 10px 12px; border-radius: 9px;
+  border: 1px solid var(--line, rgba(255,255,255,.2));
+  color: inherit; background: #141b2b; font: inherit;
+}
+#jsonConfigSelect option { color: #fff; background: #141b2b; }

@@ -75,12 +75,13 @@ function renderDetails(data) {
   $('#details').innerHTML = rows.map(([k, v]) => detailRow(k, v)).join('');
 }
 
-function renderConfigs(links) {
+function renderConfigs(links, additionalConfigs = []) {
+  const allConfigs = [...links, ...additionalConfigs];
   const suffix = isV2BoxMode ? ' مخصوص V2Box' : '';
-  $('#configCount').textContent = `${links.length} کانفیگ فعال${suffix}`;
+  $('#configCount').textContent = `${allConfigs.length} کانفیگ فعال${suffix}`;
   const title = $('#configsTitle');
   if (title) title.textContent = isV2BoxMode ? 'کانفیگ‌های فعال مخصوص V2Box' : 'کانفیگ‌های فعال';
-  $('#configs').innerHTML = links.map((item) => `
+  $('#configs').innerHTML = allConfigs.map((item) => `
     <article class="config-item">
       <div class="config-meta">
         <span class="protocol">${item.protocol}</span>
@@ -89,7 +90,7 @@ function renderConfigs(links) {
       <code>${item.url}</code>
       <div class="button-row">
         <button class="small" data-copy-text="${encodeURIComponent(item.url)}">کپی</button>
-        <a class="button small ghost" href="${item.url}">باز کردن در کلاینت</a>
+        <a class="button small ghost" href="${item.url}" target="_blank" rel="noreferrer">${item.source === 'file' ? 'نمایش JSON' : 'باز کردن در کلاینت'}</a>
       </div>
     </article>
   `).join('');
@@ -146,11 +147,31 @@ async function init() {
       ? `اشتراک V2Box کاربر ${data.client.email}`
       : `اشتراک کاربر ${data.client.email}`;
     $('#summary').textContent = isV2BoxMode
-      ? `${data.links.length} کانفیگ سازگار با V2Box آماده شد. مصرف فعلی: ${formatBytes(data.usedTraffic)} از ${data.client.totalGB ? formatBytes(data.client.totalGB) : 'نامحدود'}`
-      : `${data.links.length} کانفیگ فعال یافت شد. مصرف فعلی: ${formatBytes(data.usedTraffic)} از ${data.client.totalGB ? formatBytes(data.client.totalGB) : 'نامحدود'}`;
+      ? `${data.links.length} کانفیگ لینکی و ${(data.additionalConfigs || []).length} کانفیگ JSON آماده شد. مصرف فعلی: ${formatBytes(data.usedTraffic)} از ${data.client.totalGB ? formatBytes(data.client.totalGB) : 'نامحدود'}`
+      : `${data.links.length} کانفیگ لینکی و ${(data.additionalConfigs || []).length} کانفیگ JSON آماده شد. مصرف فعلی: ${formatBytes(data.usedTraffic)} از ${data.client.totalGB ? formatBytes(data.client.totalGB) : 'نامحدود'}`;
 
     const modeBadge = $('#modeBadge');
     if (modeBadge) modeBadge.textContent = isV2BoxMode ? 'V2Box Compatible' : 'User Subscription';
+
+    // File-backed JSON is independent of the panel's VLESS link list.
+    if (data.jsonSubscriptionUrl) {
+      $('#jsonAction')?.classList.remove('hidden');
+      setValue('#jsonSubscriptionUrl', data.jsonSubscriptionUrl);
+      setLink('#openJsonSub', data.jsonSubscriptionUrl);
+      const downloadUrl = new URL(data.jsonSubscriptionUrl);
+      downloadUrl.searchParams.set('download', '1');
+      setLink('#downloadJsonSub', downloadUrl.toString());
+      $('#copyJsonBody')?.addEventListener('click', async () => {
+        try {
+          const response = await fetch(data.jsonSubscriptionUrl, { cache: 'no-store' });
+          const body = await response.text();
+          if (!response.ok) throw new Error(body);
+          await copyText(body);
+        } catch (error) {
+          toast(error.message || 'دریافت JSON ناموفق بود');
+        }
+      });
+    }
 
     setValue('#subscriptionUrl', normalSubscriptionUrl);
     setValue('#v2boxSubscriptionUrl', v2boxSubscriptionUrl);
@@ -166,7 +187,7 @@ async function init() {
 
     const copyAll = $('#copyAll');
     if (copyAll) {
-      copyAll.textContent = isV2BoxMode ? 'کپی تمام کانفیگ‌های V2Box' : 'کپی تمام کانفیگ‌ها';
+      copyAll.textContent = isV2BoxMode ? 'کپی لینک‌های V2Box' : 'کپی کانفیگ‌های لینکی (بدون JSON)';
       copyAll.addEventListener('click', () => copyText(data.links.map((item) => item.url).join('\n')));
     }
 
@@ -180,7 +201,7 @@ async function init() {
     if (normalPage) normalPage.classList.toggle('active', !isV2BoxMode);
     if (v2boxPage) v2boxPage.classList.toggle('active', isV2BoxMode);
 
-    renderConfigs(data.links);
+    renderConfigs(data.links, data.additionalConfigs || []);
     renderDetails(data);
     $('#actions').classList.remove('hidden');
     $('#configsCard').classList.remove('hidden');

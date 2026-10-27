@@ -79,6 +79,21 @@
         </div>
       </div>
 
+      <div id="jsonAction" class="card action-card json-action hidden">
+        <h2>کانفیگ اضافی JSON از فایل</h2>
+        <p>یک کانفیگ کامل JSON که مستقل از لیست پنل، مستقیماً از فایل خوانده می‌شود. همه تنظیمات آن ثابت هستند و فقط echConfigList از فایل ECH updater تازه می‌شود.</p>
+        <div class="copy-row">
+          <input id="jsonSubscriptionUrl" readonly aria-label="لینک کانفیگ JSON" />
+          <button data-copy="#jsonSubscriptionUrl">کپی لینک JSON</button>
+        </div>
+        <div class="button-row">
+          <a id="openJsonSub" class="button ghost" target="_blank" rel="noreferrer">نمایش JSON</a>
+          <a id="downloadJsonSub" class="button ghost">دانلود فایل JSON</a>
+          <button id="copyJsonBody" class="button ghost" type="button">کپی محتوای JSON</button>
+        </div>
+        <small class="muted">لینک با هر درخواست مقدار ECH را بررسی می‌کند؛ فایل دانلود‌شده یک نسخه ثابت از کانفیگ همان لحظه است.</small>
+      </div>
+
       <div class="card action-card manual-action">
         <h2>دریافت دستی کانفیگ‌ها</h2>
         <p>در صورت نیاز می‌توانید همه‌ی کانفیگ‌های همین صفحه را یکجا کپی کرده و دستی در کلاینت وارد کنید.</p>

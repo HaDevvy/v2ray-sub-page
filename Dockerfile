@@ -16,9 +16,10 @@ RUN npm install --omit=dev --no-package-lock --no-audit --no-fund \
   && node --input-type=module -e "await import('express'); await import('helmet'); await import('qrcode'); console.log('dependencies ok')" \
   && npm cache clean --force
 
-COPY server.js ./
+COPY server.js xray-json.js ./
 COPY ech-updater-data ./ech-updater-data
 COPY config ./config
+COPY templates ./templates
 COPY public ./public
 
 RUN mkdir -p /app/data/hosts \

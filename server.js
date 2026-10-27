@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import QRCode from 'qrcode';
+import { buildFileXrayJson } from './xray-json.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -14,6 +15,14 @@ const PANEL_BASE_URL = (process.env.PANEL_BASE_URL || '').replace(/\/+$/, '');
 const PANEL_API_TOKEN = process.env.PANEL_API_TOKEN || '';
 const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || `http://localhost:${PORT}`).replace(/\/+$/, '');
 const ACCESS_KEY = process.env.ACCESS_KEY || '';
+// Read one complete standalone JSON file. Accept the previous env variable too.
+// Map the old default template path to the new standalone file during upgrades.
+const extraJsonEnvPath = process.env.EXTRA_XRAY_JSON_PATH || process.env.XRAY_JSON_TEMPLATE_PATH || '';
+const extraJsonResolvedPath = extraJsonEnvPath ? path.resolve(__dirname, extraJsonEnvPath) : '';
+const EXTRA_XRAY_JSON_PATH = !extraJsonResolvedPath
+  || extraJsonResolvedPath === path.join(__dirname, 'templates', 'xray-template.json')
+  ? path.join(__dirname, 'templates', 'extra-xray-config.json')
+  : extraJsonResolvedPath;
 const ECH_FILE_PATH = process.env.ECH_FILE_PATH
   ? path.resolve(__dirname, process.env.ECH_FILE_PATH)
   : path.join(__dirname, 'ech-updater-data', 'last_ech.txt');
@@ -956,6 +965,10 @@ async function loadUser(email, options = {}) {
   const rawSubscriptionUrl = publicUrl(`/sub/${publicEmail}`, { format: 'raw', key });
   const v2boxSubscriptionUrl = publicUrl(`/sub/${publicEmail}`, { compat: 'v2box', key });
   const rawV2boxSubscriptionUrl = publicUrl(`/sub/${publicEmail}`, { compat: 'v2box', format: 'raw', key });
+  // Exactly ONE extra JSON config from disk, independent of any VLESS links.
+  const jsonSubscriptionUrl = publicUrl(`/sub/${publicEmail}`, { format: 'json', key });
+  const jsonConfigs = [{ index: 1, name: 'Xray JSON (از فایل)', url: jsonSubscriptionUrl }];
+  const additionalConfigs = [{ name: 'Xray JSON (از فایل، ECH به‌روز)', protocol: 'JSON', url: jsonSubscriptionUrl, source: 'file' }];
   const userPageUrl = publicUrl(`/u/${publicEmail}`, { key });
   const v2boxUserPageUrl = publicUrl(`/u/${publicEmail}`, { compat: 'v2box', key });
 
@@ -970,6 +983,9 @@ async function loadUser(email, options = {}) {
     rawSubscriptionUrl,
     v2boxSubscriptionUrl,
     rawV2boxSubscriptionUrl,
+    jsonSubscriptionUrl,
+    jsonConfigs,
+    additionalConfigs,
     userPageUrl,
     v2boxUserPageUrl,
     secretPath: SECRET_PATH,
@@ -1071,12 +1087,24 @@ router.get('/api/user/:email', requireAccessKey, async (req, res) => {
 
 router.get('/sub/:email', requireAccessKey, async (req, res) => {
   try {
+    const format = req.query.format === 'raw' ? 'raw' : req.query.format === 'json' ? 'json' : 'base64';
     const data = await loadUser(req.params.email);
-    const format = req.query.format === 'raw' ? 'raw' : 'base64';
+    res.set('Cache-Control', 'no-store');
+    if (format === 'json') {
+      // JSON is always read from disk, even if there are ZERO VLESS panel links.
+      if (req.query.config !== undefined && String(req.query.config) !== '1') {
+        return res.status(400).type('text/plain').send('There is only one file-based JSON config (config=1).');
+      }
+      const config = await buildFileXrayJson(EXTRA_XRAY_JSON_PATH, await readLatestEch());
+      if (req.query.download === '1') {
+        const safeName = String(req.params.email).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64) || 'user';
+        res.set('Content-Disposition', `attachment; filename="xray-${safeName}.json"`);
+      }
+      return res.type('application/json').send(`${JSON.stringify(config, null, 2)}\n`);
+    }
     const compat = normalizeSubscriptionCompat(req.query.compat ?? req.query.client ?? req.query.app ?? req.query.target);
     const links = linksForSubscriptionCompat(data.links, compat);
     res.set('Content-Type', 'text/plain; charset=utf-8');
-    res.set('Cache-Control', 'no-store');
     res.send(toSubscriptionBody(links, format));
   } catch (err) {
     console.error('[sub]', err);
@@ -1116,4 +1144,5 @@ app.listen(PORT, () => {
   console.log(`Hosts page path: ${SECRET_PATH || ''}${HOSTS_PAGE_PATH}`);
   console.log(`Hosts API path: ${SECRET_PATH || ''}${HOSTS_API_PATH}`);
   console.log(`App config path: ${APP_CONFIG_PATH}`);
+  console.log(`Extra Xray JSON file: ${EXTRA_XRAY_JSON_PATH}`);
 });

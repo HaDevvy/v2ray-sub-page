@@ -66,7 +66,7 @@ const panel = http.createServer((req, res) => {
       success: true,
       msg: '',
       obj: {
-        client,
+        client: req.url.includes('demo-no-vless') ? { ...client, email: 'demo-no-vless', subId: 'empty-sub' } : client,
         inboundIds: [2],
         usedTraffic: 1637422
       }
@@ -79,7 +79,7 @@ const panel = http.createServer((req, res) => {
     res.end(JSON.stringify({
       success: true,
       msg: '',
-      obj: [
+      obj: req.url.includes('empty-sub') ? [] : [
         'vmess://mock-config-one#Demo%20VMess',
         'vless://mock-config-two@example.com:443?encryption=none&allowInsecure=0&sni=example.com&type=ws#Demo%20VLESS',
         'vless://mock-config-market@market.hqmq.com:443?encryption=none&allowInsecure=0&sni=market.hqmq.com&type=ws#Demo%20Market%20VLESS',
@@ -131,6 +131,7 @@ const child = spawn(process.execPath, ['server.js'], {
     SECRET_PATH: 'secret-test',
     ACCESS_KEY: 'test-key',
     ECH_FILE_PATH: echFilePath,
+    ECH_AUTO_REFRESH: 'false',
     APP_CONFIG_PATH: appConfigPath,
     HOSTS_DIR_PATH: hostsDirPath,
     HOST_SECRET_PATH: 'host-secret-test',
@@ -218,6 +219,50 @@ try {
   if (api.status !== 200) throw new Error(`api failed: ${api.status} ${api.text}`);
   const apiJson = JSON.parse(api.text);
   if (!apiJson.success || apiJson.obj.links.length !== 10) throw new Error(`api payload is invalid: expected 10 links, got ${apiJson.obj.links.length}`);
+  if (!apiJson.obj.jsonSubscriptionUrl.includes('format=json') || !Array.isArray(apiJson.obj.jsonConfigs) || apiJson.obj.jsonConfigs.length !== 1
+    || !Array.isArray(apiJson.obj.additionalConfigs) || apiJson.obj.additionalConfigs.length !== 1
+    || apiJson.obj.additionalConfigs[0].source !== 'file') {
+    throw new Error('Exactly one file-based additional JSON config was not included in the user API');
+  }
+  const jsonSub = await request(`${base}/secret-test/sub/demo-user?format=json&key=test-key`);
+  if (jsonSub.status !== 200 || !jsonSub.headers.get('content-type')?.includes('application/json')) {
+    throw new Error(`JSON subscription should have application/json content type: ${jsonSub.status} ${jsonSub.text}`);
+  }
+  const jsonConfig = JSON.parse(jsonSub.text);
+  const jsonOutbound = jsonConfig.outbounds.find((item) => item.tag === 'proxy');
+  if (!jsonOutbound || jsonOutbound.settings.address !== 'market.dgetebar.ir' || jsonOutbound.settings.port !== 2083
+    || jsonOutbound.settings.id !== '0dc5e0b4-a011-473e-8a8e-dc9d26bf044c' || jsonOutbound.settings.email !== 't@t.tt'
+    || jsonOutbound.streamSettings.tlsSettings.serverName !== 'se.multi7.xyz') {
+    throw new Error('JSON subscription did not retain the exact file-defined server/UUID/SNI independent of the panel');
+  }
+  if (jsonOutbound.streamSettings.tlsSettings.echConfigList !== 'A+B/C=' || jsonOutbound.streamSettings.tlsSettings.echForceQuery !== 'full'
+    || jsonOutbound.streamSettings.tlsSettings.fingerprint !== 'unsafe'
+    || JSON.stringify(jsonOutbound.streamSettings.tlsSettings.curvePreferences) !== '["X25519"]') {
+    throw new Error('JSON subscription did not include mandatory TLS/ECH fields');
+  }
+  if (jsonOutbound.streamSettings.network !== 'xhttp' || jsonOutbound.streamSettings.xhttpSettings.path !== '/docs/api'
+    || jsonConfig.routing.rules.length !== 10 || jsonConfig.routing.rules[8].outboundTag !== 'direct'
+    || jsonConfig.routing.rules[9].outboundTag !== 'proxy') {
+    throw new Error('The standalone JSON did not retain exact XHTTP or routing parameters');
+  }
+  const downloadJson = await request(`${base}/secret-test/sub/demo-user?format=json&config=1&key=test-key&download=1`);
+  if (downloadJson.status !== 200 || !downloadJson.headers.get('content-disposition')?.includes('attachment')
+    || JSON.parse(downloadJson.text).outbounds[0].settings.address !== 'market.dgetebar.ir') {
+    throw new Error('The one file-based JSON download failed');
+  }
+  const badJsonIndex = await request(`${base}/secret-test/sub/demo-user?format=json&config=2&key=test-key`);
+  if (badJsonIndex.status !== 400) throw new Error('JSON request must not select panel VLESS indexes');
+  const jsonNoPanelLinks = await request(`${base}/secret-test/sub/demo-no-vless?format=json&key=test-key`);
+  if (jsonNoPanelLinks.status !== 200 || JSON.parse(jsonNoPanelLinks.text).outbounds[0].settings.address !== 'market.dgetebar.ir') {
+    throw new Error('JSON must work when the user has zero VLESS panel links');
+  }
+  const userNoPanelLinks = await request(`${base}/secret-test/api/user/demo-no-vless?key=test-key`);
+  const noPanelData = JSON.parse(userNoPanelLinks.text).obj;
+  if (userNoPanelLinks.status !== 200 || noPanelData.links.length !== 0 || noPanelData.additionalConfigs.length !== 1) {
+    throw new Error('File-based JSON config was not offered to users with empty panel subscriptions');
+  }
+  const jsonWithoutKey = await request(`${base}/secret-test/sub/demo-user?format=json`);
+  if (jsonWithoutKey.status !== 401) throw new Error('JSON endpoint should respect ACCESS_KEY');
   if (!apiJson.obj.v2boxSubscriptionUrl.includes('compat=v2box') || !apiJson.obj.rawV2boxSubscriptionUrl.includes('compat=v2box') || !apiJson.obj.rawV2boxSubscriptionUrl.includes('format=raw')) {
     throw new Error(`V2Box subscription URLs are missing from API response: ${JSON.stringify(apiJson.obj)}`);
   }
@@ -304,6 +349,11 @@ try {
 
   await fs.writeFile(echFilePath, 'NEW+ECH=\n');
 
+  const jsonAfterEchChange = await request(`${base}/secret-test/sub/demo-user?format=json&key=test-key`);
+  if (jsonAfterEchChange.status !== 200 || JSON.parse(jsonAfterEchChange.text).outbounds[0].streamSettings.tlsSettings.echConfigList !== 'NEW+ECH=') {
+    throw new Error('JSON subscription did not pick up updated ECH file without restart');
+  }
+
   const saveHosts = await request(`${base}/secret-test/host-secret-test/api?host=example.com&key=admin-key`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -341,7 +391,7 @@ try {
   const qr = await request(`${base}/secret-test/qr?text=${encodeURIComponent('hello')}&key=test-key`);
   if (qr.status !== 200 || !qr.text.includes('<svg')) throw new Error('qr failed');
 
-  console.log('Smoke test passed. Routes, secret path, hosts secret path, access key, panel proxy, per-source-host editor, subscription expansion, QR, per-SNI ECH/port policy, standard and V2Box-compatible ECH encoding, and sensitive-field masking are OK.');
+  console.log('Smoke test passed. Existing subscriptions, secret path, hosts admin, per-host overrides, QR, one independent file JSON config (including empty panel links), hot ECH file updates and authentication are OK.');
 } finally {
   child.kill('SIGTERM');
   panel.close();
