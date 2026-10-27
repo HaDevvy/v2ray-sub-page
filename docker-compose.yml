@@ -14,12 +14,6 @@ services:
       - ${PWD}/config:/app/config:ro
       - ${PWD}/templates:/app/templates:ro
       - v2-sub-page-data:/app/data
-    networks:
-      - shared-net
-
-networks:
-  shared-net:
-    external: true
 
 volumes:
   v2-sub-page-data:

@@ -221,7 +221,8 @@ try {
   if (!apiJson.success || apiJson.obj.links.length !== 10) throw new Error(`api payload is invalid: expected 10 links, got ${apiJson.obj.links.length}`);
   if (!apiJson.obj.jsonSubscriptionUrl.includes('format=json') || !Array.isArray(apiJson.obj.jsonConfigs) || apiJson.obj.jsonConfigs.length !== 1
     || !Array.isArray(apiJson.obj.additionalConfigs) || apiJson.obj.additionalConfigs.length !== 1
-    || apiJson.obj.additionalConfigs[0].source !== 'file') {
+    || apiJson.obj.additionalConfigs[0].source !== 'file' || apiJson.obj.additionalConfigs[0].type !== 'custom'
+    || !apiJson.obj.jsonCollectionUrl.includes('format=json-list')) {
     throw new Error('Exactly one file-based additional JSON config was not included in the user API');
   }
   const jsonSub = await request(`${base}/secret-test/sub/demo-user?format=json&key=test-key`);
@@ -230,8 +231,8 @@ try {
   }
   const jsonConfig = JSON.parse(jsonSub.text);
   const jsonOutbound = jsonConfig.outbounds.find((item) => item.tag === 'proxy');
-  if (!jsonOutbound || jsonOutbound.settings.address !== 'market.dgetebar.ir' || jsonOutbound.settings.port !== 2083
-    || jsonOutbound.settings.id !== '0dc5e0b4-a011-473e-8a8e-dc9d26bf044c' || jsonOutbound.settings.email !== 't@t.tt'
+  if (!jsonOutbound || jsonOutbound.settings.vnext[0].address !== 'market.dgetebar.ir' || jsonOutbound.settings.vnext[0].port !== 2083
+    || jsonOutbound.settings.vnext[0].users[0].id !== '0dc5e0b4-a011-473e-8a8e-dc9d26bf044c' || jsonOutbound.settings.vnext[0].users[0].email !== 't@t.tt'
     || jsonOutbound.streamSettings.tlsSettings.serverName !== 'se.multi7.xyz') {
     throw new Error('JSON subscription did not retain the exact file-defined server/UUID/SNI independent of the panel');
   }
@@ -245,15 +246,36 @@ try {
     || jsonConfig.routing.rules[9].outboundTag !== 'proxy') {
     throw new Error('The standalone JSON did not retain exact XHTTP or routing parameters');
   }
+  const customAlias = await request(`${base}/secret-test/sub/demo-user?format=custom-json&key=test-key`);
+  if (customAlias.status !== 200 || JSON.stringify(JSON.parse(customAlias.text)) !== JSON.stringify(jsonConfig)) {
+    throw new Error('custom-json endpoint should return a full Xray config object');
+  }
+  const jsonList = await request(`${base}/secret-test/sub/demo-user?format=json-list&key=test-key`);
+  if (jsonList.status !== 200 || !jsonList.headers.get('content-type')?.includes('application/json')) {
+    throw new Error('JSON collection endpoint is missing');
+  }
+  const collection = JSON.parse(jsonList.text);
+  if (collection.format !== 'v2-sub-page/custom-json-v1' || collection.configs.length !== apiJson.obj.links.length + 1
+    || collection.configs.filter((item) => item.type === 'custom').length !== 1
+    || collection.configs.at(-1).format !== 'json'
+    || collection.configs[0].url !== apiJson.obj.links[0].url
+    || collection.configs.at(-1).config.outbounds[0].streamSettings.tlsSettings.echConfigList !== 'A+B/C=') {
+    throw new Error('JSON collection did not include previous links and one complete custom JSON profile');
+  }
+  const emptyCollection = await request(`${base}/secret-test/sub/demo-no-vless?format=json-list&key=test-key`);
+  if (emptyCollection.status !== 200 || JSON.parse(emptyCollection.text).configs.length !== 1
+    || JSON.parse(emptyCollection.text).configs[0].type !== 'custom') {
+    throw new Error('JSON collection must contain one custom profile when the panel has no links');
+  }
   const downloadJson = await request(`${base}/secret-test/sub/demo-user?format=json&config=1&key=test-key&download=1`);
   if (downloadJson.status !== 200 || !downloadJson.headers.get('content-disposition')?.includes('attachment')
-    || JSON.parse(downloadJson.text).outbounds[0].settings.address !== 'market.dgetebar.ir') {
+    || JSON.parse(downloadJson.text).outbounds[0].settings.vnext[0].address !== 'market.dgetebar.ir') {
     throw new Error('The one file-based JSON download failed');
   }
   const badJsonIndex = await request(`${base}/secret-test/sub/demo-user?format=json&config=2&key=test-key`);
   if (badJsonIndex.status !== 400) throw new Error('JSON request must not select panel VLESS indexes');
   const jsonNoPanelLinks = await request(`${base}/secret-test/sub/demo-no-vless?format=json&key=test-key`);
-  if (jsonNoPanelLinks.status !== 200 || JSON.parse(jsonNoPanelLinks.text).outbounds[0].settings.address !== 'market.dgetebar.ir') {
+  if (jsonNoPanelLinks.status !== 200 || JSON.parse(jsonNoPanelLinks.text).outbounds[0].settings.vnext[0].address !== 'market.dgetebar.ir') {
     throw new Error('JSON must work when the user has zero VLESS panel links');
   }
   const userNoPanelLinks = await request(`${base}/secret-test/api/user/demo-no-vless?key=test-key`);

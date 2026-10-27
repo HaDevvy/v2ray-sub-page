@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import QRCode from 'qrcode';
-import { buildFileXrayJson } from './xray-json.js';
+import { buildFileXrayJson, buildJsonConfigCollection } from './xray-json.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -967,8 +967,9 @@ async function loadUser(email, options = {}) {
   const rawV2boxSubscriptionUrl = publicUrl(`/sub/${publicEmail}`, { compat: 'v2box', format: 'raw', key });
   // Exactly ONE extra JSON config from disk, independent of any VLESS links.
   const jsonSubscriptionUrl = publicUrl(`/sub/${publicEmail}`, { format: 'json', key });
-  const jsonConfigs = [{ index: 1, name: 'Xray JSON (از فایل)', url: jsonSubscriptionUrl }];
-  const additionalConfigs = [{ name: 'Xray JSON (از فایل، ECH به‌روز)', protocol: 'JSON', url: jsonSubscriptionUrl, source: 'file' }];
+  const jsonConfigs = [{ index: 1, name: 'Custom Xray (JSON)', type: 'custom', format: 'json', url: jsonSubscriptionUrl }];
+  const additionalConfigs = [{ name: 'Custom Xray (JSON + ECH)', protocol: 'JSON', type: 'custom', format: 'json', url: jsonSubscriptionUrl, source: 'file' }];
+  const jsonCollectionUrl = publicUrl(`/sub/${publicEmail}`, { format: 'json-list', key });
   const userPageUrl = publicUrl(`/u/${publicEmail}`, { key });
   const v2boxUserPageUrl = publicUrl(`/u/${publicEmail}`, { compat: 'v2box', key });
 
@@ -984,6 +985,7 @@ async function loadUser(email, options = {}) {
     v2boxSubscriptionUrl,
     rawV2boxSubscriptionUrl,
     jsonSubscriptionUrl,
+    jsonCollectionUrl,
     jsonConfigs,
     additionalConfigs,
     userPageUrl,
@@ -1087,20 +1089,25 @@ router.get('/api/user/:email', requireAccessKey, async (req, res) => {
 
 router.get('/sub/:email', requireAccessKey, async (req, res) => {
   try {
-    const format = req.query.format === 'raw' ? 'raw' : req.query.format === 'json' ? 'json' : 'base64';
+    const requestedFormat = String(req.query.format || '').toLowerCase();
+    const format = requestedFormat === 'raw' ? 'raw'
+      : ['json', 'custom-json', 'json-list'].includes(requestedFormat) ? requestedFormat
+      : 'base64';
     const data = await loadUser(req.params.email);
     res.set('Cache-Control', 'no-store');
-    if (format === 'json') {
-      // JSON is always read from disk, even if there are ZERO VLESS panel links.
+    if (['json', 'custom-json', 'json-list'].includes(format)) {
+      // One full custom configuration independent of the panel's link list.
       if (req.query.config !== undefined && String(req.query.config) !== '1') {
         return res.status(400).type('text/plain').send('There is only one file-based JSON config (config=1).');
       }
       const config = await buildFileXrayJson(EXTRA_XRAY_JSON_PATH, await readLatestEch());
+      const output = format === 'json-list' ? buildJsonConfigCollection(data.links, config) : config;
       if (req.query.download === '1') {
         const safeName = String(req.params.email).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64) || 'user';
-        res.set('Content-Disposition', `attachment; filename="xray-${safeName}.json"`);
+        const prefix = format === 'json-list' ? 'subscription' : 'custom-xray';
+        res.set('Content-Disposition', `attachment; filename="${prefix}-${safeName}.json"`);
       }
-      return res.type('application/json').send(`${JSON.stringify(config, null, 2)}\n`);
+      return res.type('application/json').send(`${JSON.stringify(output, null, 2)}\n`);
     }
     const compat = normalizeSubscriptionCompat(req.query.compat ?? req.query.client ?? req.query.app ?? req.query.target);
     const links = linksForSubscriptionCompat(data.links, compat);

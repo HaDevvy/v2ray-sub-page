@@ -75,25 +75,38 @@ function renderDetails(data) {
   $('#details').innerHTML = rows.map(([k, v]) => detailRow(k, v)).join('');
 }
 
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+}
+
 function renderConfigs(links, additionalConfigs = []) {
   const allConfigs = [...links, ...additionalConfigs];
   const suffix = isV2BoxMode ? ' مخصوص V2Box' : '';
   $('#configCount').textContent = `${allConfigs.length} کانفیگ فعال${suffix}`;
   const title = $('#configsTitle');
   if (title) title.textContent = isV2BoxMode ? 'کانفیگ‌های فعال مخصوص V2Box' : 'کانفیگ‌های فعال';
-  $('#configs').innerHTML = allConfigs.map((item) => `
-    <article class="config-item">
-      <div class="config-meta">
-        <span class="protocol">${item.protocol}</span>
-        <strong>${item.name}</strong>
-      </div>
-      <code>${item.url}</code>
-      <div class="button-row">
-        <button class="small" data-copy-text="${encodeURIComponent(item.url)}">کپی</button>
-        <a class="button small ghost" href="${item.url}" target="_blank" rel="noreferrer">${item.source === 'file' ? 'نمایش JSON' : 'باز کردن در کلاینت'}</a>
-      </div>
-    </article>
-  `).join('');
+  $('#configs').innerHTML = allConfigs.map((item, index) => {
+    const isCustom = item.type === 'custom';
+    const url = escapeHtml(item.url);
+    return `
+      <article class="config-item">
+        <div class="config-meta">
+          <span class="protocol">${escapeHtml(item.protocol)}</span>
+          <strong>${escapeHtml(item.name)}</strong>
+        </div>
+        <code>${url}</code>
+        <div class="button-row">
+          ${isCustom
+            ? `<button class="small" data-json-copy-url="${url}">کپی JSON کامل</button>
+               <button class="small ghost" data-json-preview-url="${url}" data-json-preview-target="custom-json-preview-${index}">نمایش کانفیگ کاستوم</button>
+               <a class="button small ghost" href="${url}" download>دانلود JSON</a>`
+            : `<button class="small" data-copy-text="${encodeURIComponent(item.url)}">کپی لینک</button>
+               <a class="button small ghost" href="${url}" target="_blank" rel="noreferrer">باز کردن در کلاینت</a>`}
+        </div>
+        ${isCustom ? `<pre id="custom-json-preview-${index}" class="custom-json-preview hidden" dir="ltr" tabindex="0"></pre>` : ''}
+      </article>`;
+  }).join('');
+
 }
 
 function fallbackSubscriptionUrl({ format = '', compat = '' } = {}) {
@@ -123,6 +136,29 @@ document.addEventListener('click', (event) => {
 
   const encoded = event.target.closest('[data-copy-text]')?.getAttribute('data-copy-text');
   if (encoded) return copyText(decodeURIComponent(encoded));
+  const jsonCopy = event.target.closest('[data-json-copy-url]');
+  const jsonPreview = event.target.closest('[data-json-preview-url]');
+  if (!jsonCopy && !jsonPreview) return;
+  const target = jsonCopy || jsonPreview;
+  const url = target.getAttribute(jsonCopy ? 'data-json-copy-url' : 'data-json-preview-url');
+  (async () => {
+    try {
+      const response = await fetch(url, { cache: 'no-store' });
+      const config = await response.json();
+      if (!response.ok) throw new Error(config.msg || 'خطا در خواندن کانفیگ');
+      const content = `${JSON.stringify(config, null, 2)}\n`;
+      if (jsonCopy) await copyText(content);
+      else {
+        const element = document.getElementById(target.getAttribute('data-json-preview-target'));
+        if (element) {
+          element.textContent = content;
+          element.classList.toggle('hidden');
+        }
+      }
+    } catch (error) {
+      toast(error.message || 'دریافت JSON ناموفق بود');
+    }
+  })();
 });
 
 async function init() {
@@ -171,6 +207,11 @@ async function init() {
           toast(error.message || 'دریافت JSON ناموفق بود');
         }
       });
+    }
+
+    if (data.jsonCollectionUrl) {
+      setValue('#jsonCollectionUrl', data.jsonCollectionUrl);
+      setLink('#openJsonCollection', data.jsonCollectionUrl);
     }
 
     setValue('#subscriptionUrl', normalSubscriptionUrl);

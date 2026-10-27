@@ -162,7 +162,9 @@
           "alpn": [
             "http/1.1"
           ],
-          "curvePreferences": ["X25519"],
+          "curvePreferences": [
+            "X25519"
+          ],
           "fingerprint": "unsafe",
           "echConfigList": "AEX+DQBBWgAgACCLXREq47D0QYYI7eUSAxHCyfwrsM8VHkc4sNv5NC96NgAEAAEAAQASY2xvdWRmbGFyZS1lY2guY29tAAA=",
           "echForceQuery": "full"

@@ -11,7 +11,7 @@
 - صفحه‌ی سازگار با V2Box روی همان مسیر کاربر: `/u/:email?compat=v2box`
 - ساخت لینک subscription قابل import در کلاینت‌های رایج
 - خروجی Base64 برای subscription: `/sub/:email`
-- **جدید:** دقیقاً یک کانفیگ کامل Xray JSON از **فایل مستقل** کنار کانفیگ‌های قبلی: `/sub/:email?format=json` (فقط مقدار ECH به‌روز می‌شود)
+- **نسخه جدید:** یک کانفیگ **Custom Xray JSON** از فایل مستقل در لیست صفحهٔ کاربر، با نمایش و کپی بدنهٔ JSON، خروجی قابل اجرا و فهرست تلفیقی `/sub/:email?format=json-list`
 - خروجی خام newline-separated: `/sub/:email?format=raw`
 - خروجی سازگار با V2Box برای ECH: `/sub/:email?compat=v2box`
 - نمایش کانفیگ‌های سازگار با V2Box در API صفحه کاربر: `/api/user/:email?compat=v2box`
@@ -77,47 +77,52 @@ HOSTS_ADMIN_KEY=
 
 
 
-## اضافه کردن یک کانفیگ Xray JSON از فایل (مستقل از پنل)
+## کانفیگ Custom با فرمت JSON (مستقل از کانفیگ‌های پنل)
 
-در صفحهٔ `/u/EMAIL`، **دقیقاً یک کانفیگ اضافی JSON** به انتهای فهرست کانفیگ‌های قبلی اضافه می‌شود. این کانفیگ حتی اگر در پاسخ `subLinks` پنل هیچ لینک VLESS وجود نداشته باشد نمایش داده می‌شود. کانفیگ‌های قبلی VLESS/VMess و خروجی‌های قدیمی Base64، raw و V2Box تغییری نمی‌کنند. JSON کامل را نمی‌توان داخل اشتراک متنی لینک‌های `vless://` قرار داد؛ بنابراین یک URL مجزا برای دریافت JSON فراهم شده است.
+**رفتار نسخه سوم:** به فهرست کانفیگ‌های صفحهٔ `/u/:email` یک ردیف «Custom Xray (JSON + ECH)» اضافه شده است؛ در خود همان ردیف امکان **نمایش بدنهٔ JSON کامل، کپی JSON کامل و دانلود فایل** وجود دارد. لینک‌های موجود تغییری نکرده‌اند، حتی اگر لیست پنل خالی باشد کانفیگ Custom همچنان در صفحه حضور دارد. این کانفیگ **از هیچ لینک VLESS در پنل ساخته نمی‌شود**؛ فایل مستقلی را می‌خواند که مدیر تعیین کرده است.
 
-فایل منبع این کانفیگ:
+### فایل منبع و به‌روزرسانی ECH
 
-```text
-templates/extra-xray-config.json
-```
-
-این فایل شامل **تمام بخش‌ها و پارامترهای نمونهٔ ارسالی** است، از جمله `log`، `dns`، `inbounds`، `outbounds`، `routing`، `metrics`، `policy` و `stats`. هیچ‌کدام از آدرس، پورت، UUID، email، SNI، XHTTP، DNS و Routing از لینک‌های پنل جایگزین نمی‌شوند. مقدار نمونهٔ `echConfigList` در خود JSON باقی می‌ماند تا مشخص باشد فایل اولیه چه بوده است، اما **در پاسخ ارسالی به کاربر فقط همین فیلد با محتوای فایل updater به‌روز می‌شود**. بدنهٔ فایل اصلی دست‌کاری نمی‌شود.
-
-```text
-/sub/EMAIL?format=json                     # تنها کانفیگ JSON اضافی، از فایل
-/sub/EMAIL?format=json&download=1          # دانلود فایل .json
-/sub/EMAIL?format=json&config=1            # معادل مسیر اول
-```
-
-`config=2` یا بالاتر عمداً پشتیبانی نمی‌شود؛ این خروجی به انتخاب یکی از سرورهای پنل وابسته نیست. چنانچه `SECRET_PATH` و `ACCESS_KEY` تعیین شده‌اند، مسیر مخفی و کلید برای JSON هم ضروری‌اند.
-
-### به‌روزرسانی خودکار `echConfigList` از فایل updater
-
-```dotenv
-ECH_FILE_PATH=./ech-updater-data/last_ech.txt
+```env
 EXTRA_XRAY_JSON_PATH=./templates/extra-xray-config.json
+ECH_FILE_PATH=./ech-updater-data/last_ech.txt
 ```
 
-در هر درخواست JSON، برنامه ابتدا کانفیگ کامل را از `EXTRA_XRAY_JSON_PATH` و مقدار جاری ECH را از `ECH_FILE_PATH` می‌خواند، سپس مقدار `outbounds[tag=proxy].streamSettings.tlsSettings.echConfigList` را با مقدار جدید جایگزین می‌کند. **بدون ری‌استارت** تغییرات ECH و حتی تغییر محتوای فایل JSON اعمال می‌شوند. کانفیگ‌های لینکی پیشین نیز مطابق منطق قدیمی از همین فایل ECH استفاده می‌کنند.
+`templates/extra-xray-config.json` کپی کامل کانفیگ ارائه‌شده است: `log`، `dns`، `inbounds`، `outbounds`، `routing`، `metrics`، `policy` و `stats`. هر دو فایل در هر درخواست مجدداً خوانده می‌شوند و نیاز به راه‌اندازی دوباره ندارند.
 
-این نسخه برای JSON، *ECH را خودش از DNS دانلود نمی‌کند*؛ فرض آن است که سرویس `ech-updater` موجود فایل `last_ech.txt` را به‌روز می‌کند. بنابراین به‌روز بودن واقعی ECH وابسته به آن updater است. اگر مقدار قابل خواندن در فایل نباشد، برنامه برای JSON خطای HTTP 503 برمی‌گرداند و ECH قدیمی موجود در template را به عنوان مقدار جدید جا نمی‌زند.
+خروجی JSON برای سازگاری با روش قدیمی‌تر و رایج کانفیگ Xray، فیلدهای VLESS `settings.address`، `settings.port`، `settings.id`، `settings.encryption` و `settings.email` را در **همان یک outbound** به `settings.vnext[0]` و `users[0]` منتقل می‌کند. تمام مقادیر اتصال بدون تغییر می‌مانند و دیگر بخش‌ها دست‌نخورده‌اند. چهار فیلد `echConfigList`، `curvePreferences`، `fingerprint` و `echForceQuery` در `tlsSettings` حفظ می‌شوند و فقط **مقدار `echConfigList`** از فایل updater جایگزین می‌شود. اگر فایل updater مقدار نداشته باشد، درخواست با `503` رد می‌شود؛ مقدار قدیمی template به‌جای مقدار جدید به کاربر تحویل داده نمی‌شود.
 
-در Docker Compose، پوشهٔ `templates` با mount فقط‌خواندنی به container منتقل می‌شود تا بتوان آن را از روی سرور ویرایش کرد. پوشهٔ `ech-updater-data` نیز طبق تنظیمات قبلی به `/app/ech-updater-data` mount شده است. پس از استخراج ZIP، بررسی کنید مسیر خارجی `/root/dev/Market/ech-updater-data` با محل اجرای updater شما مطابقت داشته باشد.
+### مسیرهای خروجی
 
-**توجه:** کانفیگ JSON حاوی UUID مشخص‌شده در نمونهٔ اصلی است و برای همهٔ کاربرانی که به صفحهٔ آن دسترسی دارند یکسان خواهد بود. بنابراین لازم است UUID واقعاً روی سرور مقصد معتبر باشد و سطح دسترسی صفحه کنترل شود. این فایل همچنین یک inbound بدون احراز هویت روی `0.0.0.0:10808` و DNS خصوصی `192.168.20.15` دارد که مطابق درخواست اولیه حفظ شده‌اند؛ قبل از استفادهٔ عملی محدودکردن دسترسی inbound و بررسی DNS توصیه می‌شود.
-
-### اجرای تست‌ها
-
-```bash
-npm run test:unit    # بررسی خواندن فایل کامل و تغییر تنها مقدار ECH
-npm test             # به همراه تست HTTP (نیازمند نصب وابستگی‌ها)
+```text
+/sub/EMAIL?format=json                 # یک فایل Custom JSON کامل Xray (قابل استفاده با Xray)
+/sub/EMAIL?format=custom-json          # نام دوم برای همان فایل Custom
+/sub/EMAIL?format=json&download=1      # دانلود JSON قابل اجرا
+/sub/EMAIL?format=json-list            # فهرست JSON شامل همه لینک‌های قبلی و دقیقاً یک Custom با بدنه کامل
+/sub/EMAIL                              # Base64 قبلی بدون تغییر
+/sub/EMAIL?format=raw                   # لینک‌های خام قبلی بدون تغییر
+/sub/EMAIL?compat=v2box                 # خروجی قبلی V2Box بدون تغییر
 ```
+
+فرمت `json-list` برای یکپارچه‌سازی با API پروژه است، و شکل کلی آن چنین است:
+
+```json
+{
+  "format": "v2-sub-page/custom-json-v1",
+  "configs": [
+    { "type": "link", "name": "previous server", "protocol": "VLESS", "url": "vless://..." },
+    { "type": "custom", "name": "Custom Xray (ECH)", "format": "json", "config": { "log": {}, "dns": {}, "inbounds": [], "outbounds": [], "routing": {} } }
+  ]
+}
+```
+
+**توجه مهم دربارهٔ کلاینت‌ها:** `json-list` یک استاندارد عمومی Subscription برای v2rayN نیست؛ v2rayN از واردکردن خودکار یک Custom Xray JSON کامل از طریق اشتراک Base64/VLESS پشتیبانی نمی‌کند. فایل `/sub/EMAIL?format=json` را از روش Custom Config یا از یک هستهٔ Xray با پشتیبانی از این ویژگی‌ها استفاده کنید، نه گزینهٔ «Add subscription». اگر کلاینت تنها لینک VLESS وارد می‌کند، تمام گزینه‌های DNS، Routing و ECH موردنظر را با یک لینک نمی‌توان حفظ کرد. JSON فایل کامل Xray است، نه sing-box یا Clash JSON.
+
+اگر `SECRET_PATH` یا `ACCESS_KEY` فعال شده‌اند برای همهٔ مسیرها اعمال می‌شوند. پوشهٔ `templates` در Docker Compose به‌صورت read-only mount شده تا فایل JSON از روی میزبان قابل تغییر باشد. مسیر `/root/dev/Market/ech-updater-data` باید مطابق محل اجرای updater روی سرور تنظیم شود.
+
+**نکات امنیتی:** UUID نمونه برای همهٔ کاربران یکسان است و فقط در صورتی کار می‌کند که روی سرور مقصد معتبر باشد. Inbound نمونه روی `0.0.0.0:10808` بدون احراز هویت گوش می‌دهد و DNS خصوصی `192.168.20.15` دارد؛ قبل از اجرای مستقیم کانفیگ، میزان دسترسی به آن‌ها بررسی شود. سرویس این پروژه، ECH را از DNS دانلود نمی‌کند و تنها آخرین مقدار فایل updater را مصرف می‌کند.
+
+تست مستقل بدون وابستگی‌ها: `npm run test:unit`. تست HTTP با `npm test` و پس از نصب وابستگی‌ها اجرا می‌شود.
 
 ---
 

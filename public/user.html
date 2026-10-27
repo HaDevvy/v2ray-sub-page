@@ -80,23 +80,31 @@
       </div>
 
       <div id="jsonAction" class="card action-card json-action hidden">
-        <h2>کانفیگ اضافی JSON از فایل</h2>
-        <p>یک کانفیگ کامل JSON که مستقل از لیست پنل، مستقیماً از فایل خوانده می‌شود. همه تنظیمات آن ثابت هستند و فقط echConfigList از فایل ECH updater تازه می‌شود.</p>
+        <h2>کانفیگ Custom Xray با فرمت JSON</h2>
+        <p>یک کانفیگ کاستوم با فرمت JSON و تمام تنظیمات DNS، Routing، TLS و XHTTP، مستقل از لیست کانفیگ‌های پنل. فقط مقدار echConfigList از فایل ECH به‌روز می‌شود.</p>
         <div class="copy-row">
           <input id="jsonSubscriptionUrl" readonly aria-label="لینک کانفیگ JSON" />
           <button data-copy="#jsonSubscriptionUrl">کپی لینک JSON</button>
         </div>
         <div class="button-row">
-          <a id="openJsonSub" class="button ghost" target="_blank" rel="noreferrer">نمایش JSON</a>
+          <a id="openJsonSub" class="button ghost" target="_blank" rel="noreferrer">نمایش فایل Custom JSON</a>
           <a id="downloadJsonSub" class="button ghost">دانلود فایل JSON</a>
           <button id="copyJsonBody" class="button ghost" type="button">کپی محتوای JSON</button>
         </div>
-        <small class="muted">لینک با هر درخواست مقدار ECH را بررسی می‌کند؛ فایل دانلود‌شده یک نسخه ثابت از کانفیگ همان لحظه است.</small>
+        <small class="muted">لینک با هر درخواست مقدار ECH را از فایل updater می‌خواند؛ این فایل را از طریق قابلیت Custom Config در کلاینت وارد کنید، نه از طریق Subscription معمولی.</small>
+        <div class="copy-row">
+          <input id="jsonCollectionUrl" readonly aria-label="فهرست JSON شامل کانفیگ‌های قبلی و کانفیگ کاستوم" />
+          <button data-copy="#jsonCollectionUrl">کپی لینک فهرست JSON</button>
+        </div>
+        <div class="button-row">
+          <a id="openJsonCollection" class="button ghost" target="_blank" rel="noreferrer">فهرست JSON همه کانفیگ‌ها + یک Custom</a>
+        </div>
+        <small class="muted">فهرست JSON برای API و مشاهده استفاده می‌شود؛ ساختار آن فرمت Subscription استاندارد v2rayN نیست.</small>
       </div>
 
       <div class="card action-card manual-action">
         <h2>دریافت دستی کانفیگ‌ها</h2>
-        <p>در صورت نیاز می‌توانید همه‌ی کانفیگ‌های همین صفحه را یکجا کپی کرده و دستی در کلاینت وارد کنید.</p>
+        <p>این دکمه فقط لینک‌های استاندارد را کپی می‌کند؛ برای کانفیگ Custom، دکمهٔ «کپی JSON کامل» در فهرست زیر را بزنید.</p>
         <button id="copyAll" class="button full">کپی تمام کانفیگ‌ها</button>
       </div>
     </section>
