@@ -2,11 +2,7 @@
   "vless": {
     "defaultEchMode": "ech",
     "sniPolicies": {
-      "se.hqmq.pro": "ech",
-      "de.hqmq.pro": {
-        "ech": "ech",
-        "port": 443
+      "*.hqmq.host": "ech"
       }
     }
-  }
 }
